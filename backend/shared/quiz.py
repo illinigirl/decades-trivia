@@ -146,6 +146,7 @@ Return ONLY JSON:
     src = by_id.get(q.get("source_id"), facts[0])
     q["category"] = src["category"]
     q["source"] = {"title": src["title"], "url": src["url"]}
+    q["source_fact_id"] = src["id"]   # for bank dedup: one question per fact
     q["decade"] = decade
     return q
 

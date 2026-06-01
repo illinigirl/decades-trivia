@@ -59,10 +59,10 @@ def seed_slice(decade: str, category: str) -> None:
     for q in results:
         if not q:
             continue
-        qid = bank.qid(q["question"])
-        if qid in seen:
+        key = bank.item_key(q)        # dedup by source fact, not question text
+        if key in seen:
             continue
-        seen.add(qid)
+        seen.add(key)
         bank.put(decade, category, q)
         added += 1
         if added >= need:

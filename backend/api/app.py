@@ -109,14 +109,14 @@ def handler(event, context):
                                          retrieval.year_range(decade))
             if q is None:
                 q = quiz.make_question(decade, category=category)
-                if bank.qid(q["question"]) in recent_set:   # dup -> retry once
+                if bank.item_key(q) in recent_set:          # same fact -> retry once
                     alt = quiz.make_question(decade, category=category)
-                    if bank.qid(alt["question"]) not in recent_set:
+                    if bank.item_key(alt) not in recent_set:
                         q = alt
                 try:
                     q["id"] = bank.put(decade, category, q)
                 except Exception:
-                    q["id"] = bank.qid(q["question"])
+                    q["id"] = bank.item_key(q)
 
             stats.record_served(user, decade, q["id"])
             return _resp(200, q)

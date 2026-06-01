@@ -34,25 +34,33 @@ def slice_key(decade: str, category: str) -> str:
 
 
 def qid(question: str) -> str:
-    """Stable short id from the question text (dedup + client 'seen' tracking)."""
+    """Stable short id from the question text (used for live/topic questions)."""
     return hashlib.sha1(question.strip().lower().encode()).hexdigest()[:12]
 
 
+def item_key(q: dict) -> str:
+    """Bank key for a question: the source FACT, so the same fact can't produce
+    multiple near-duplicate questions in a slice. Falls back to question hash."""
+    fid = q.get("source_fact_id")
+    return f"f:{fid}" if fid else f"q:{qid(q['question'])}"
+
+
 def put(decade: str, category: str, q: dict) -> str:
-    """Store a question in its slice (idempotent on qid). Returns the qid."""
-    qq = qid(q["question"])
-    if _ddb is None:               # no table configured (local) -> just hash
-        return qq
+    """Store a question keyed by its source fact (dedups near-duplicates).
+    Returns the item key."""
+    sk = item_key(q)
+    if _ddb is None:               # no table configured (local)
+        return sk
     _ddb.put_item(Item={
         "pk": slice_key(decade, category),
-        "sk": qq,
+        "sk": sk,
         "q": json.dumps({
             "question": q["question"], "choices": q["choices"],
             "answer_index": q["answer_index"], "explanation": q["explanation"],
             "category": q["category"], "source": q["source"], "decade": decade,
         }),
     })
-    return qq
+    return sk
 
 
 def random_question(decade: str, category: str, recent: list | None = None,

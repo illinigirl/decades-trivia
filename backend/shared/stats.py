@@ -57,8 +57,9 @@ def record_served(user: str, decade: str, qid: str, cap: int = 50) -> None:
 
 
 def weak_category(user: str, decade: str, cats: list[str]) -> str | None:
-    """Pick a focus category: prefer unseen, then lowest accuracy. 70% of the
-    time drill the weakest; otherwise return None for variety."""
+    """Pick a focus category with a lean toward weak areas but plenty of spread,
+    so the quiz doesn't lock onto one category. Half the time pick randomly among
+    the few weakest (unseen/lowest accuracy); otherwise None (caller goes random)."""
     d = get(user, decade)
     scored = []
     for c in cats:
@@ -67,4 +68,7 @@ def weak_category(user: str, decade: str, cats: list[str]) -> str | None:
         acc = s["hit"] / total if total else -1.0   # unseen sorts first
         scored.append((acc, total, c))
     scored.sort()
-    return scored[0][2] if random.random() < 0.7 else None
+    if random.random() < 0.5:
+        weakest = [c for _, _, c in scored[:3]]      # spread across the 3 weakest
+        return random.choice(weakest)
+    return None
