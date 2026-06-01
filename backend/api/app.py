@@ -37,7 +37,11 @@ def _resp(status: int, body, *, content_type="application/json"):
     return {
         "statusCode": status,
         "headers": {"content-type": content_type,
-                    "access-control-allow-origin": "*"},
+                    "access-control-allow-origin": "*",
+                    # Never let the browser cache responses — a constant /api/quiz
+                    # URL would otherwise return the same cached question, and a
+                    # cached index.html would never pick up updates.
+                    "cache-control": "no-store, no-cache, must-revalidate"},
         "body": payload,
     }
 
