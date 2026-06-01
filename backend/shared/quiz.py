@@ -185,10 +185,23 @@ KNOWLEDGE_SYSTEM = (
     "person, work) into the question.\n"
     "- Use specific years where natural. Subject must be from the stated era.\n"
     "- Four options; exactly one correct; the other three plausible but clearly "
-    "wrong (real same-category options). Vary which position is correct."
+    "wrong (real same-category options). Vary which position is correct.\n"
+    "- NEVER reveal the answer in the question. Do not include the correct answer "
+    "(or a quote/phrase that contains it) in the question text — that makes it "
+    "trivially easy. The player must have to actually know it."
 )
 
 LETTERS = "ABCD"
+
+
+def gives_away(q: dict) -> bool:
+    """True if the correct answer text appears in the question (a giveaway)."""
+    try:
+        ans = q["choices"][q["answer_index"]]
+    except (KeyError, IndexError, TypeError):
+        return False
+    a = re.sub(r"^(the|a|an)\s+", "", ans.strip().lower())
+    return len(a) >= 3 and a in q.get("question", "").lower()
 
 
 def _solve(q: dict, era: str, model: str) -> int:
@@ -273,6 +286,8 @@ Return ONLY JSON:
         except Exception:
             continue
         if _LEAK_RE.search(q.get("question", "")):
+            continue
+        if gives_away(q):                        # answer leaked into the question
             continue
         if not _verified(q, era):
             continue

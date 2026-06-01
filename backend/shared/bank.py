@@ -25,6 +25,16 @@ def _in_range(text: str, rng) -> bool:
     years = {int(y) for y in _YEAR_RE.findall(text)}
     return (not years) or any(rng[0] <= y <= rng[1] for y in years)
 
+
+def _gives_away(qd: dict) -> bool:
+    """True if the correct answer appears in the question text (a giveaway)."""
+    try:
+        ans = qd["choices"][qd["answer_index"]]
+    except (KeyError, IndexError, TypeError):
+        return False
+    a = re.sub(r"^(the|a|an)\s+", "", ans.strip().lower())
+    return len(a) >= 3 and a in qd.get("question", "").lower()
+
 TABLE = os.environ.get("QUESTIONS_TABLE")
 _ddb = boto3.resource("dynamodb").Table(TABLE) if TABLE else None
 
@@ -87,8 +97,14 @@ def random_question(decade: str, category: str, recent: list | None = None,
     if not items:
         return None
     seen = set(recent or [])
-    pool = [it for it in items if it["sk"] not in seen
-            and _in_range(json.loads(it["q"]).get("question", ""), rng)]
+    pool = []
+    for it in items:
+        if it["sk"] in seen:
+            continue
+        qd = json.loads(it["q"])
+        if not _in_range(qd.get("question", ""), rng) or _gives_away(qd):
+            continue
+        pool.append(it)
     if not pool:
         # Nothing new in this slice — return None so the caller generates a
         # fresh question instead of repeating one you've already seen.
