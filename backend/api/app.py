@@ -12,8 +12,13 @@ Routes:
 """
 import json
 import os
+import random
 
-from shared import corpus_s3, quiz, retrieval, stats
+from shared import bank, corpus_s3, quiz, retrieval, stats
+
+# Fraction of (non-fresh) quiz requests served from the pre-generated/cached
+# bank for speed; the rest generate live and grow the bank.
+BANK_SERVE_PROB = 0.85
 
 _INDEX_HTML = None
 
@@ -70,13 +75,35 @@ def handler(event, context):
         if path == "/api/quiz":
             decade = params["decade"]
             corpus_s3.ensure(decade)
-            category = params.get("category") or None
             topic = params.get("topic") or None
-            # Adaptive: with no explicit category/topic, bias toward weak areas.
-            if not category and not topic:
-                category = stats.weak_category(
-                    _user(params, headers), decade, retrieval.categories(decade))
-            q = quiz.make_question(decade, category=category, topic=topic)
+            user = _user(params, headers)
+            fresh = params.get("fresh") == "1"
+            exclude = set(filter(None, (params.get("exclude") or "").split(",")))
+
+            # Focused topic study is always generated live (query-specific).
+            if topic:
+                q = quiz.make_question(decade, topic=topic)
+                q["id"] = bank.qid(q["question"])
+                return _resp(200, q)
+
+            # Resolve a concrete category (adaptive -> weak area -> random) so we
+            # can use the fast bank path.
+            cats = retrieval.categories(decade)
+            category = (params.get("category")
+                        or stats.weak_category(user, decade, cats)
+                        or random.choice(cats))
+
+            # Serve from the bank most of the time (instant); otherwise generate
+            # live and cache it back so the bank keeps growing.
+            if not fresh and random.random() < BANK_SERVE_PROB:
+                q = bank.random_question(decade, category, exclude)
+                if q:
+                    return _resp(200, q)
+            q = quiz.make_question(decade, category=category)
+            try:
+                q["id"] = bank.put(decade, category, q)
+            except Exception:
+                q["id"] = bank.qid(q["question"])
             return _resp(200, q)
 
         if path == "/api/answer" and method == "POST":

@@ -47,6 +47,18 @@ Resources:
         - { AttributeName: pk, KeyType: HASH }
         - { AttributeName: sk, KeyType: RANGE }
 
+  # Pre-generated + cached question bank. pk = "<decade>#<category>", sk = qid.
+  QuestionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+
   TriviaApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -63,10 +75,12 @@ Resources:
           CORPUS_BUCKET: !Ref CorpusBucket
           CORPUS_DIR: /tmp/corpus
           STATS_TABLE: !Ref StatsTable
+          QUESTIONS_TABLE: !Ref QuestionsTable
           CORPUS_VERSION: !Ref CorpusVersion   # change forces new containers
       Policies:
         - S3ReadPolicy: { BucketName: !Ref CorpusBucket }
         - DynamoDBCrudPolicy: { TableName: !Ref StatsTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref QuestionsTable }
         - Statement:
             - Effect: Allow
               Action: bedrock:InvokeModel
@@ -110,6 +124,9 @@ Outputs:
   CorpusBucket:
     Description: Upload corpus/*.json and *.f32 here under the corpus/ prefix
     Value: !Ref CorpusBucket
+  QuestionsTable:
+    Description: DynamoDB question bank table (used by ingestion/gen_bank.py)
+    Value: !Ref QuestionsTable
   CustomDomainTarget:
     Condition: HasDomain
     Description: Point your subdomain CNAME at this (Cloudflare, DNS-only/grey)

@@ -123,6 +123,7 @@ let USER = null, NAME = null;
 const api = (p, o) => fetch(p, {headers:{'x-user':USER}, ...o}).then(r=>r.json());
 const LETTERS='ABCD';
 let current=null, answered=false;
+let seen=[];   // recent question ids, sent so the bank doesn't repeat
 
 // --- Identity: name + PIN -> stable id (works across devices in the group) ---
 function makeId(name, pin){
@@ -173,10 +174,13 @@ async function loadQuestion(){
   $('#next').disabled=true;
   $('#qcard').innerHTML='<div class="muted">Thinking up a question…</div>';
   const decade=$('#decade').value, cat=$('#category').value;
-  const q=await api(`/api/quiz?decade=${decade}`+(cat?`&category=${encodeURIComponent(cat)}`:''));
+  const ex=seen.slice(-30).join(',');
+  const q=await api(`/api/quiz?decade=${decade}`+(cat?`&category=${encodeURIComponent(cat)}`:'')+
+                    (ex?`&exclude=${ex}`:''));
   if(q.error){ $('#qcard').innerHTML=`<div class="muted">Error: ${q.error}</div>`;
                $('#next').disabled=false; return; }
   current=q;
+  if(q.id) seen.push(q.id);
   $('#qcard').innerHTML=
     `<span class="badge">${q.category}</span><div class="q">${q.question}</div>`+
     q.choices.map((c,i)=>`<button class="choice" data-i="${i}">${LETTERS[i]}. ${c}</button>`).join('');
