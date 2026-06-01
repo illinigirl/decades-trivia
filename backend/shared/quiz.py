@@ -18,7 +18,16 @@ QUIZ_SYSTEM = (
     "factually accurate multiple-choice questions grounded ONLY in the source "
     "facts provided. The correct answer must be directly verifiable from the "
     "facts. Distractors must be plausible but clearly wrong. Never invent "
-    "details not present in the sources."
+    "details not present in the sources.\n\n"
+    "CRITICAL — the player only ever sees your question, never the source text:\n"
+    "- The question MUST be fully self-contained. NEVER refer to 'the source', "
+    "'the facts', 'the passage', 'the text', 'mentioned', 'described', 'above', "
+    "or 'provided' — the player has no such context.\n"
+    "- Put the needed context INSIDE the question (name the year, event, person, "
+    "etc.) so it is answerable on its own.\n"
+    "- Ask about exactly ONE thing with ONE unambiguous answer. Never combine "
+    "two asks (e.g. 'by what margin AND in what time').\n"
+    "- Prefer concrete, well-known facts over obscure incidental details."
 )
 
 
@@ -46,10 +55,13 @@ def make_question(decade: str, *, category: str | None = None,
 
 Write ONE {difficulty}-difficulty multiple-choice trivia question based on the
 most interesting, specific fact above. Requirements:
+- Self-contained: do NOT mention "the source", "the facts", "mentioned",
+  "described", or "above". Bake the context (year/event/person) into the question.
+- Ask ONE thing with ONE clear answer (no two-part questions).
 - 4 options; exactly one correct and verifiable from the facts.
 - The other 3 are plausible but wrong.
 - Vary which option is correct (don't always pick A).
-- Include a one-sentence explanation of the answer.
+- One-sentence explanation, also without referring to "the source".
 - Set source_id to the [id] of the fact the question is based on.
 
 Return ONLY JSON:
