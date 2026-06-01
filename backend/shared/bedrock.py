@@ -12,8 +12,9 @@ from botocore.config import Config
 REGION = os.environ.get("AWS_REGION", "us-east-2")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "amazon.titan-embed-text-v2:0")
 # Newer Claude models on Bedrock require an inference-profile id (the "us." prefix),
-# not the bare model id. Haiku 4.5 is fast + cheap for quiz generation.
-GEN_MODEL = os.environ.get("GEN_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+# not the bare model id. Sonnet for generation: a study tool needs factual
+# reliability (Haiku occasionally conflated facts, e.g. "1984 Montreal Olympics").
+GEN_MODEL = os.environ.get("GEN_MODEL", "us.anthropic.claude-sonnet-4-6")
 
 # Adaptive retries back off automatically when Bedrock throttles on-demand
 # throughput — essential for bulk embedding during ingestion.

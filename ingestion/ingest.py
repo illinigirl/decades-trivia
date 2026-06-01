@@ -111,16 +111,24 @@ def build_decade(decade: str) -> None:
         if not text:
             print(f"  skip (missing): {title}")
             continue
+        # Year-titled pages ("1986 in science", "1986") list facts under the
+        # year heading, so the line itself often omits the year. Prefix it so
+        # each fact is self-dating (and add a year field). Skip "1980s"-style.
+        ym = re.match(r"(\d{4})(?![\ds])", title)
+        page_year = int(ym.group(1)) if ym else None
         page_chunks = chunk_text(text)
         for j, body in enumerate(page_chunks):
-            chunks.append({
+            chunk = {
                 "id": f"{decade}-{len(chunks)}",
                 "decade": decade,
                 "category": category,
                 "title": title,
                 "url": title_url(title),
-                "text": body,
-            })
+                "text": f"{page_year}: {body}" if page_year else body,
+            }
+            if page_year:
+                chunk["year"] = page_year
+            chunks.append(chunk)
         print(f"  {title:38s} [{category:16s}] -> {len(page_chunks)} chunks")
 
     # Year-indexed timeline pages -> dedicated Inventions / Medicine categories,
