@@ -69,7 +69,7 @@ def fetch_plaintext(title: str) -> str | None:
     return None
 
 
-def chunk_text(text: str) -> list[str]:
+def chunk_text(text: str, cap: int = MAX_CHUNKS_PER_PAGE) -> list[str]:
     """Split plain text into fact-sized chunks, skipping section headers."""
     chunks: list[str] = []
     for para in text.split("\n"):
@@ -84,7 +84,7 @@ def chunk_text(text: str) -> list[str]:
             para = para[cut:].strip()
         if len(para) >= MIN_CHUNK:
             chunks.append(para)
-    return chunks[:MAX_CHUNKS_PER_PAGE]
+    return chunks[:cap]
 
 
 def title_url(title: str) -> str:
@@ -106,7 +106,7 @@ def _fetch_timeline(title: str) -> str | None:
 def build_decade(decade: str) -> None:
     print(f"\n=== Building corpus for {decade} ({DECADES[decade]}s) ===")
     chunks: list[dict] = []
-    for category, title in pages_for(decade):
+    for category, title, cap in pages_for(decade):
         text = fetch_plaintext(title)
         if not text:
             print(f"  skip (missing): {title}")
@@ -116,7 +116,7 @@ def build_decade(decade: str) -> None:
         # each fact is self-dating (and add a year field). Skip "1980s"-style.
         ym = re.match(r"(\d{4})(?![\ds])", title)
         page_year = int(ym.group(1)) if ym else None
-        page_chunks = chunk_text(text)
+        page_chunks = chunk_text(text, cap or MAX_CHUNKS_PER_PAGE)
         for j, body in enumerate(page_chunks):
             chunk = {
                 "id": f"{decade}-{len(chunks)}",

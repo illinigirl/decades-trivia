@@ -129,4 +129,7 @@ def pages_for(decade: str) -> list[tuple[str, str]]:
     for title in ROWING_BASE + ROWING_PAGES.get(decade, []):
         pages.append(("Rowing", title))
 
-    return pages
+    # Normalize to (category, title, cap); cap None -> default. Then add the
+    # curated pop-culture subjects (movies / TV / toys), which carry their own cap.
+    from popculture import popculture_pages
+    return [(c, t, None) for c, t in pages] + popculture_pages(decade)

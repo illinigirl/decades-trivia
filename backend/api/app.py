@@ -68,55 +68,54 @@ def handler(event, context):
             return _resp(200, {"decades": decades})
 
         if path == "/api/categories":
-            decade = params["decade"]
-            corpus_s3.ensure(decade)
-            return _resp(200, {"categories": retrieval.categories(decade)})
+            return _resp(200, {"categories": quiz.categories_for(params["decade"])})
 
         if path == "/api/quiz":
             decade = params["decade"]
-            corpus_s3.ensure(decade)
             topic = params.get("topic") or None
             user = _user(params, headers)
             fresh = params.get("fresh") == "1"
             client_recent = [x for x in (params.get("exclude") or "").split(",") if x]
+            cats = quiz.categories_for(decade)
+            yr = retrieval.year_range(decade)
 
-            # Focused topic study is always generated live (query-specific).
+            # Focused topic study: generate live from knowledge (verified).
             if topic:
-                q = quiz.make_question(decade, topic=topic)
-                q["id"] = bank.qid(q["question"])
-                stats.record_served(user, decade, q["id"])
-                return _resp(200, q)
+                q = quiz.make_knowledge_question(decade, focus=topic)
+                if q:
+                    q["id"] = bank.put(decade, q.get("category", "Pop Culture"), q)
+                    stats.record_served(user, decade, q["id"])
+                    return _resp(200, q)
 
-            # Resolve a concrete category (adaptive -> weak area -> random) so we
-            # can use the fast bank path.
-            cats = retrieval.categories(decade)
+            # Resolve a concrete category (adaptive -> weak area -> random).
             category = (params.get("category")
                         or stats.weak_category(user, decade, cats)
                         or random.choice(cats))
 
-            # Combine server-side history with the client's seen list so repeats
-            # are prevented even if the browser sends nothing.
+            # Combine server-side history with the client's list so repeats are
+            # prevented even if the browser sends nothing.
             recent = list(dict.fromkeys(stats.recent_served(user, decade)
                                         + client_recent))
             recent_set = set(recent)
 
-            # Always serve an unseen banked question if one exists (instant);
-            # only generate live when the slice is exhausted (or ?fresh=1), which
-            # also grows the bank.
+            # Serve an unseen banked question if one exists (instant); else
+            # generate live (verified) and cache it.
             q = None
             if not fresh:
-                q = bank.random_question(decade, category, recent,
-                                         retrieval.year_range(decade))
+                q = bank.random_question(decade, category, recent, yr)
             if q is None:
-                q = quiz.make_question(decade, category=category)
-                if bank.item_key(q) in recent_set:          # same fact -> retry once
-                    alt = quiz.make_question(decade, category=category)
-                    if bank.item_key(alt) not in recent_set:
+                q = quiz.make_knowledge_question(decade, category=category)
+                if q and bank.item_key(q) in recent_set:    # same subject -> retry
+                    alt = quiz.make_knowledge_question(decade, category=category)
+                    if alt and bank.item_key(alt) not in recent_set:
                         q = alt
-                try:
+                if q is None:        # generation failed -> serve any banked question
+                    q = bank.random_question(decade, category, [], yr)
+                    if q is None:
+                        return _resp(503, {"error": "could not produce a question; "
+                                           "please try again"})
+                else:
                     q["id"] = bank.put(decade, category, q)
-                except Exception:
-                    q["id"] = bank.item_key(q)
 
             stats.record_served(user, decade, q["id"])
             return _resp(200, q)

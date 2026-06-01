@@ -22,6 +22,27 @@ DECADE_LABEL = {"60s": "1960s", "70s": "1970s", "80s": "1980s",
                 "90s": "1990s", "00s": "2000s", "all": "1960s–2000s",
                 "tdih": "this week in history (June 14–20, any year)"}
 
+# Categories for the knowledge-based generator (decoupled from the corpus, so
+# coverage is as broad as Claude's knowledge, not just ingested pages).
+QUIZ_CATEGORIES = ["Music", "Movies", "Television", "Sports", "News & Politics",
+                   "Pop Culture", "Toys & Games", "Science & Tech", "Fashion",
+                   "Rowing", "This Week in History"]
+NICHE_CATEGORIES = {"Rowing", "This Week in History"}
+
+
+def categories_for(decade: str) -> list[str]:
+    if decade == "tdih":
+        return ["This Week in History"]
+    return QUIZ_CATEGORIES
+
+
+def era_phrase(decade: str) -> str:
+    if decade == "all":
+        return "the 1960s through the 2000s"
+    if decade == "tdih":
+        return "any year of history"
+    return f"the {DECADE_LABEL.get(decade, decade)}"
+
 QUIZ_SYSTEM = (
     "You write questions for an American pub trivia night — the fun, social kind "
     "at a bar. Questions should feel like real pub trivia: about NOTABLE, "
@@ -149,6 +170,95 @@ Return ONLY JSON:
     q["source_fact_id"] = src["id"]   # for bank dedup: one question per fact
     q["decade"] = decade
     return q
+
+
+KNOWLEDGE_SYSTEM = (
+    "You write questions for an American pub trivia night — fun, social, the kind "
+    "asked at a bar. Use your own knowledge to write NOTABLE, memorable questions "
+    "about famous people, songs, films, shows, athletes, inventions, toys, and "
+    "events that a general crowd would recognize, with a satisfying 'oh yeah!' "
+    "answer.\n\n"
+    "STRICT ACCURACY: the marked correct answer must be unambiguously, factually "
+    "correct, and exactly one option is correct. If you are not certain a fact is "
+    "true, do NOT use it. Avoid obscure minutiae.\n\n"
+    "- Self-contained: never reference 'the source/facts'; bake context (year, "
+    "person, work) into the question.\n"
+    "- Use specific years where natural. Subject must be from the stated era.\n"
+    "- Four options; exactly one correct; the other three plausible but clearly "
+    "wrong (real same-category options). Vary which position is correct."
+)
+
+LETTERS = "ABCD"
+
+
+def _solve(q: dict, era: str, model: str) -> int:
+    """Have a model answer the question BLIND (without seeing the marked answer).
+    Returns the option index it picks, or -1 if unparseable."""
+    opts = "\n".join(f"{LETTERS[i]}. {c}" for i, c in enumerate(q["choices"]))
+    prompt = (f"Answer this {era} trivia question using accurate real-world "
+              f"knowledge. Reply with ONLY the letter of the correct option.\n\n"
+              f"{q['question']}\n{opts}")
+    try:
+        ans = bedrock.generate(prompt, model=model, temperature=0,
+                               max_tokens=5).strip().upper()
+        for ch in ans:
+            if ch in LETTERS:
+                return LETTERS.index(ch)
+    except Exception:
+        return -1
+    return -1
+
+
+def _verified(q: dict, era: str) -> bool:
+    """Keep a question only if TWO different strong models, answering blind,
+    both independently pick the marked-correct option. Catches wrong answers
+    and ambiguous questions."""
+    marked = q.get("answer_index")
+    if marked is None or not (0 <= marked < len(q.get("choices", []))):
+        return False
+    for model in (bedrock.SONNET, bedrock.OPUS):
+        if _solve(q, era, model) != marked:
+            return False
+    return True
+
+
+def make_knowledge_question(decade: str, *, category: str | None = None,
+                            focus: str | None = None, avoid=()) -> dict | None:
+    """Generate a pub-trivia question from Claude's knowledge of the era, then
+    verify it by independent-solve consensus. Returns None if none verify."""
+    era = era_phrase(decade)
+    if category == "This Week in History" or decade == "tdih":
+        topic = f"a notable event, birth, or death that happened during " \
+                f"June 14–20, within {era}"
+    elif focus:
+        topic = f"{focus} ({era})"
+    else:
+        topic = f"{category or 'pop culture'} in {era}"
+    avoid_clause = ("\nPick something DIFFERENT from these already-used subjects: "
+                    + "; ".join(list(avoid)[-40:])) if avoid else ""
+
+    prompt = f"""Write ONE multiple-choice pub-trivia question about {topic}.
+Choose a notable, widely-recognized subject.{avoid_clause}
+
+Return ONLY JSON:
+{{"subject": "<short tag naming the subject>", "question": "...",
+  "choices": ["...","...","...","..."], "answer_index": 0, "explanation": "..."}}"""
+
+    for attempt in range(5):
+        try:
+            q = bedrock.generate_json(prompt, system=KNOWLEDGE_SYSTEM,
+                                      temperature=0.9 if attempt == 0 else 0.6,
+                                      max_tokens=500)
+        except Exception:
+            continue
+        if _LEAK_RE.search(q.get("question", "")):
+            continue
+        if _verified(q, era):
+            q["category"] = category or "Pop Culture"
+            q["decade"] = decade
+            q["source"] = None          # generated from knowledge, not a citation
+            return q
+    return None
 
 
 def review_facts(decade: str, *, topic: str | None = None,

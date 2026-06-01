@@ -11,10 +11,12 @@ from botocore.config import Config
 
 REGION = os.environ.get("AWS_REGION", "us-east-2")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "amazon.titan-embed-text-v2:0")
-# Newer Claude models on Bedrock require an inference-profile id (the "us." prefix),
-# not the bare model id. Sonnet for generation: a study tool needs factual
-# reliability (Haiku occasionally conflated facts, e.g. "1984 Montreal Olympics").
-GEN_MODEL = os.environ.get("GEN_MODEL", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
+# Newer Claude models on Bedrock require an inference-profile id (the "us." prefix).
+# Account has invoke access to these three (Sonnet 4.6 / Sonnet 4 are denied).
+SONNET = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+OPUS = "us.anthropic.claude-opus-4-5-20251101-v1:0"
+HAIKU = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+GEN_MODEL = os.environ.get("GEN_MODEL", SONNET)
 
 # Adaptive retries back off automatically when Bedrock throttles on-demand
 # throughput — essential for bulk embedding during ingestion.
@@ -34,7 +36,7 @@ def embed(text: str) -> list[float]:
 
 
 def generate(prompt: str, *, max_tokens: int = 800, temperature: float = 0.7,
-             system: str | None = None) -> str:
+             system: str | None = None, model: str | None = None) -> str:
     """Single-turn Claude completion, returns plain text."""
     body = {
         "anthropic_version": "bedrock-2023-05-31",
@@ -44,7 +46,7 @@ def generate(prompt: str, *, max_tokens: int = 800, temperature: float = 0.7,
     }
     if system:
         body["system"] = system
-    resp = _rt.invoke_model(modelId=GEN_MODEL, body=json.dumps(body))
+    resp = _rt.invoke_model(modelId=model or GEN_MODEL, body=json.dumps(body))
     return json.loads(resp["body"].read())["content"][0]["text"]
 
 

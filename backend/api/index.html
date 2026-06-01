@@ -198,9 +198,10 @@ async function answer(i){
     else if(bi===i) b.classList.add('wrong');
   });
   const src=current.source;
+  const srcHtml = (src && src.url)
+    ? `<div class="src" style="margin-top:8px">↪ <a href="${src.url}" target="_blank">${src.title}</a></div>` : '';
   $('#qcard').insertAdjacentHTML('beforeend',
-    `<div class="explain">${correct?'✅ Correct! ':'❌ '} ${current.explanation}
-     <div class="src" style="margin-top:8px">↪ <a href="${src.url}" target="_blank">${src.title}</a></div></div>`);
+    `<div class="explain">${correct?'✅ Correct! ':'❌ '} ${current.explanation}${srcHtml}</div>`);
   api('/api/answer',{method:'POST',headers:{'content-type':'application/json','x-user':USER},
     body:JSON.stringify({decade:$('#decade').value,category:current.category,correct})});
 }

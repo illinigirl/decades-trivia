@@ -39,10 +39,15 @@ def qid(question: str) -> str:
 
 
 def item_key(q: dict) -> str:
-    """Bank key for a question: the source FACT, so the same fact can't produce
-    multiple near-duplicate questions in a slice. Falls back to question hash."""
-    fid = q.get("source_fact_id")
-    return f"f:{fid}" if fid else f"q:{qid(q['question'])}"
+    """Bank key for a question, so the same subject/fact can't produce multiple
+    near-duplicate questions in a slice. Prefer source fact, then subject tag,
+    then question hash."""
+    if q.get("source_fact_id"):
+        return f"f:{q['source_fact_id']}"
+    if q.get("subject"):
+        slug = re.sub(r"[^a-z0-9]+", "-", q["subject"].lower()).strip("-")
+        return f"s:{slug}" if slug else f"q:{qid(q['question'])}"
+    return f"q:{qid(q['question'])}"
 
 
 def put(decade: str, category: str, q: dict) -> str:
