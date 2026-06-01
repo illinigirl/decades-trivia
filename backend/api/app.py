@@ -78,13 +78,13 @@ def handler(event, context):
             topic = params.get("topic") or None
             user = _user(params, headers)
             fresh = params.get("fresh") == "1"
-            # Ordered oldest->newest so we can guarantee no back-to-back repeat.
-            recent = [x for x in (params.get("exclude") or "").split(",") if x]
+            client_recent = [x for x in (params.get("exclude") or "").split(",") if x]
 
             # Focused topic study is always generated live (query-specific).
             if topic:
                 q = quiz.make_question(decade, topic=topic)
                 q["id"] = bank.qid(q["question"])
+                stats.record_served(user, decade, q["id"])
                 return _resp(200, q)
 
             # Resolve a concrete category (adaptive -> weak area -> random) so we
@@ -94,22 +94,29 @@ def handler(event, context):
                         or stats.weak_category(user, decade, cats)
                         or random.choice(cats))
 
-            # Serve from the bank most of the time (instant); otherwise generate
-            # live and cache it back so the bank keeps growing.
+            # Combine server-side history with the client's seen list so repeats
+            # are prevented even if the browser sends nothing.
+            recent = list(dict.fromkeys(stats.recent_served(user, decade)
+                                        + client_recent))
+            recent_set = set(recent)
+
+            # Serve from the bank if it has something unseen (instant); else
+            # generate live and cache it (grows the bank).
+            q = None
             if not fresh and random.random() < BANK_SERVE_PROB:
                 q = bank.random_question(decade, category, recent)
-                if q:
-                    return _resp(200, q)
-            q = quiz.make_question(decade, category=category)
-            # If the fresh question duplicates one just seen, retry once.
-            if bank.qid(q["question"]) in recent:
-                alt = quiz.make_question(decade, category=category)
-                if bank.qid(alt["question"]) not in recent:
-                    q = alt
-            try:
-                q["id"] = bank.put(decade, category, q)
-            except Exception:
-                q["id"] = bank.qid(q["question"])
+            if q is None:
+                q = quiz.make_question(decade, category=category)
+                if bank.qid(q["question"]) in recent_set:   # dup -> retry once
+                    alt = quiz.make_question(decade, category=category)
+                    if bank.qid(alt["question"]) not in recent_set:
+                        q = alt
+                try:
+                    q["id"] = bank.put(decade, category, q)
+                except Exception:
+                    q["id"] = bank.qid(q["question"])
+
+            stats.record_served(user, decade, q["id"])
             return _resp(200, q)
 
         if path == "/api/answer" and method == "POST":

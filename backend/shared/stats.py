@@ -39,6 +39,23 @@ def get(user: str, decade: str) -> dict:
     return out
 
 
+def recent_served(user: str, decade: str) -> list[str]:
+    """Recently-served question ids for a user+decade (oldest -> newest)."""
+    if _ddb is None:
+        return []
+    item = _ddb.get_item(Key={"pk": user, "sk": f"served#{decade}"}).get("Item")
+    return list(item.get("ids", [])) if item else []
+
+
+def record_served(user: str, decade: str, qid: str, cap: int = 50) -> None:
+    """Append a served question id, keeping the last `cap`. Server-side dedup
+    so repeats are prevented even if the client doesn't send its seen list."""
+    if _ddb is None or not qid:
+        return
+    ids = [i for i in recent_served(user, decade) if i != qid] + [qid]
+    _ddb.put_item(Item={"pk": user, "sk": f"served#{decade}", "ids": ids[-cap:]})
+
+
 def weak_category(user: str, decade: str, cats: list[str]) -> str | None:
     """Pick a focus category: prefer unseen, then lowest accuracy. 70% of the
     time drill the weakest; otherwise return None for variety."""
