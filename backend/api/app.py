@@ -101,17 +101,15 @@ def handler(event, context):
                 if q:
                     return _resp(200, q)
             q = quiz.make_question(decade, category=category)
-            qq = bank.qid(q["question"])
-            # If a freshly generated question duplicates one just seen, prefer an
-            # unseen banked one instead of repeating.
-            if qq in recent:
-                alt = bank.random_question(decade, category, recent)
-                if alt:
-                    return _resp(200, alt)
+            # If the fresh question duplicates one just seen, retry once.
+            if bank.qid(q["question"]) in recent:
+                alt = quiz.make_question(decade, category=category)
+                if bank.qid(alt["question"]) not in recent:
+                    q = alt
             try:
                 q["id"] = bank.put(decade, category, q)
             except Exception:
-                q["id"] = qq
+                q["id"] = bank.qid(q["question"])
             return _resp(200, q)
 
         if path == "/api/answer" and method == "POST":

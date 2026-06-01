@@ -58,13 +58,11 @@ def random_question(decade: str, category: str, recent: list | None = None) -> d
     items = resp.get("Items", [])
     if not items:
         return None
-    recent = recent or []
-    recent_set = set(recent)
-    pool = [it for it in items if it["sk"] not in recent_set]
+    pool = [it for it in items if it["sk"] not in set(recent or [])]
     if not pool:
-        # Everything seen: drop at least the most-recent so it can't repeat back-to-back.
-        last = recent[-1] if recent else None
-        pool = [it for it in items if it["sk"] != last] or items
+        # Nothing new in this slice — return None so the caller generates a
+        # fresh question instead of repeating one you've already seen.
+        return None
     chosen = random.choice(pool)
     q = json.loads(chosen["q"])
     q["id"] = chosen["sk"]
