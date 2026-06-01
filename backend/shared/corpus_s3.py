@@ -38,6 +38,18 @@ def ensure(decade: str) -> None:
     _fetch(retrieval.TDIH_KEY)
 
 
+def exists(key: str) -> bool:
+    """Whether a corpus (e.g. 'tdih') is ingested."""
+    path = os.path.join(retrieval.CORPUS_DIR, key + ".f32")
+    if not BUCKET:
+        return os.path.exists(path)
+    try:
+        _s3.head_object(Bucket=BUCKET, Key=f"{PREFIX}{key}.f32")
+        return True
+    except Exception:
+        return False
+
+
 def available() -> list[str]:
     """Decades that have an ingested corpus (ordered oldest->newest)."""
     order = list(retrieval.DECADE_LABEL)   # excludes tdih/all by construction

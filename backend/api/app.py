@@ -57,6 +57,9 @@ def handler(event, context):
             decades = [{"key": d, "label": retrieval.DECADE_LABEL[d]} for d in avail]
             if len(avail) >= 2:   # "all decades" only meaningful with multiple
                 decades.append({"key": retrieval.ALL_KEY, "label": "All decades"})
+            if corpus_s3.exists(retrieval.TDIH_KEY):   # first-class "this week" mode
+                decades.append({"key": retrieval.TDIH_KEY,
+                                "label": "🗓 This Week in History"})
             return _resp(200, {"decades": decades})
 
         if path == "/api/categories":

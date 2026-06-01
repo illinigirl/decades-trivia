@@ -53,9 +53,33 @@
   .fact { padding:13px; background:#15162c; border-radius:12px; margin:10px 0;
           line-height:1.5; font-size:14px; }
   .hide { display:none; }
+  .userchip { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .userchip b { color:var(--txt); }
+  .link { background:none; border:none; color:var(--accent2); cursor:pointer;
+          font:inherit; padding:0; text-decoration:underline; }
+  #login { position:fixed; inset:0; background:rgba(8,8,18,.92); z-index:50;
+           display:flex; align-items:center; justify-content:center; }
+  #login .card { width:min(380px,90vw); text-align:center; }
+  #login h2 { margin:0 0 6px; }
+  #login p { color:var(--muted); margin:0 0 16px; font-size:14px; }
+  #login input { margin:7px 0; text-align:center; }
+  #login .err { color:var(--bad); font-size:13px; min-height:18px; }
 </style>
 </head>
 <body>
+<!-- LOGIN GATE (name + PIN; cross-device per-player stats) -->
+<div id="login">
+  <div class="card">
+    <h2>◢◤ DECADES TRIVIA</h2>
+    <p>Enter your name and a 4-digit PIN. Use the same two on any device to keep your stats.</p>
+    <input id="loginName" placeholder="Your name" autocomplete="off"><br>
+    <input id="loginPin" placeholder="4-digit PIN" inputmode="numeric"
+           maxlength="4" autocomplete="off"><br>
+    <div class="err" id="loginErr"></div>
+    <button class="primary" id="loginBtn" style="width:100%;margin-top:6px">Start studying →</button>
+  </div>
+</div>
+
 <header>
   <h1>◢◤ DECADES TRIVIA</h1>
   <select id="decade"></select>
@@ -65,6 +89,7 @@
     <button class="tab" data-tab="review">Review</button>
     <button class="tab" data-tab="stats">Stats</button>
   </div>
+  <div class="userchip" id="userchip"></div>
 </header>
 
 <div class="wrap">
@@ -93,12 +118,37 @@
 
 <script>
 const $ = s => document.querySelector(s);
+let USER = null, NAME = null;
 const api = (p, o) => fetch(p, {headers:{'x-user':USER}, ...o}).then(r=>r.json());
-const USER = (()=>{ let u=localStorage.getItem('dt_user');
-  if(!u){ u='u_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
-          localStorage.setItem('dt_user',u);} return u; })();
 const LETTERS='ABCD';
 let current=null, answered=false;
+
+// --- Identity: name + PIN -> stable id (works across devices in the group) ---
+function makeId(name, pin){
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')
+         + '-' + pin;
+}
+function enterApp(){
+  $('#login').classList.add('hide');
+  $('#userchip').innerHTML = `<span>👤 <b>${NAME}</b></span>`+
+    `<button class="link" id="switchUser">switch</button>`;
+  $('#switchUser').onclick = ()=>{ localStorage.removeItem('dt_id');
+    localStorage.removeItem('dt_name'); location.reload(); };
+  init();
+}
+function signIn(name, pin){
+  USER = makeId(name, pin); NAME = name.trim();
+  localStorage.setItem('dt_id', USER);
+  localStorage.setItem('dt_name', NAME);
+  enterApp();
+}
+$('#loginBtn').onclick = ()=>{
+  const name=$('#loginName').value.trim(), pin=$('#loginPin').value.trim();
+  if(name.length<2) return $('#loginErr').textContent='Enter your name.';
+  if(!/^\d{4}$/.test(pin)) return $('#loginErr').textContent='PIN must be 4 digits.';
+  signIn(name, pin);
+};
+$('#loginPin').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#loginBtn').click(); });
 
 async function init(){
   const meta = await api('/api/meta');
@@ -190,7 +240,13 @@ $('#getFacts').onclick=async()=>{
 };
 $('#decade').onchange=async()=>{ await loadCategories(); loadQuestion(); };
 $('#category').onchange=loadQuestion;
-init();
+
+// Bootstrap: resume a saved identity, or show the login gate.
+(function(){
+  const id=localStorage.getItem('dt_id'), nm=localStorage.getItem('dt_name');
+  if(id && nm){ USER=id; NAME=nm; enterApp(); }
+  else { $('#loginName').focus(); }
+})();
 </script>
 </body>
 </html>
