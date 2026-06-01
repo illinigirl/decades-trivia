@@ -40,10 +40,13 @@ def get(user: str, decade: str) -> dict:
 
 
 def recent_served(user: str, decade: str) -> list[str]:
-    """Recently-served question ids for a user+decade (oldest -> newest)."""
+    """Recently-served question ids for a user+decade (oldest -> newest).
+    Strongly consistent so a just-served question is always seen, preventing
+    near-repeats under rapid clicking."""
     if _ddb is None:
         return []
-    item = _ddb.get_item(Key={"pk": user, "sk": f"served#{decade}"}).get("Item")
+    item = _ddb.get_item(Key={"pk": user, "sk": f"served#{decade}"},
+                         ConsistentRead=True).get("Item")
     return list(item.get("ids", [])) if item else []
 
 
