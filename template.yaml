@@ -11,6 +11,10 @@ Parameters:
     Type: String
     Default: ""
     Description: Custom domain, e.g. trivia.megillini.dev
+  CorpusVersion:
+    Type: String
+    Default: "1"
+    Description: Bumped each deploy to force a cold start so new corpus is re-fetched
 
 Conditions:
   HasDomain: !Not [!Equals [!Ref CertificateArn, ""]]
@@ -59,6 +63,7 @@ Resources:
           CORPUS_BUCKET: !Ref CorpusBucket
           CORPUS_DIR: /tmp/corpus
           STATS_TABLE: !Ref StatsTable
+          CORPUS_VERSION: !Ref CorpusVersion   # change forces new containers
       Policies:
         - S3ReadPolicy: { BucketName: !Ref CorpusBucket }
         - DynamoDBCrudPolicy: { TableName: !Ref StatsTable }

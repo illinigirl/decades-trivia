@@ -13,7 +13,8 @@ sam build
 
 echo "==> sam deploy (stack: $STACK, region: $AWS_REGION)"
 # Optional custom domain: set CERT_ARN + DOMAIN in the environment to enable.
-PARAMS="CertificateArn=${CERT_ARN:-} DomainName=${DOMAIN:-}"
+# CorpusVersion changes every deploy so Lambda cold-starts and re-fetches corpus.
+PARAMS="CertificateArn=${CERT_ARN:-} DomainName=${DOMAIN:-} CorpusVersion=$(date +%s)"
 sam deploy \
   --stack-name "$STACK" \
   --region "$AWS_REGION" \
