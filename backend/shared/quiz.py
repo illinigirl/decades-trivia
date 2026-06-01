@@ -23,23 +23,36 @@ DECADE_LABEL = {"60s": "1960s", "70s": "1970s", "80s": "1980s",
                 "tdih": "this week in history (June 14–20, any year)"}
 
 QUIZ_SYSTEM = (
-    "You are a trivia question writer for a decades study app. You write "
-    "factually accurate multiple-choice questions grounded ONLY in the source "
-    "facts provided. The correct answer must be directly verifiable from the "
-    "facts. Distractors must be plausible but clearly wrong. Never invent "
-    "details not present in the sources.\n\n"
-    "CRITICAL — the player only ever sees your question, never the source text:\n"
-    "- The question MUST be fully self-contained. NEVER refer to 'the source', "
-    "'the facts', 'the passage', 'the text', 'mentioned', 'described', 'above', "
-    "or 'provided' — the player has no such context.\n"
-    "- Put the needed context INSIDE the question (name the year, event, person, "
-    "etc.) so it is answerable on its own.\n"
-    "- Ask about exactly ONE thing with ONE unambiguous answer. Never combine "
-    "two asks (e.g. 'by what margin AND in what time').\n"
-    "- If the fact gives a specific year or date, state that exact year in the "
-    "question. Never vaguely say 'in the 1980s' or 'the summer of the decade' "
-    "when a precise year is available.\n"
-    "- Prefer concrete, well-known facts over obscure incidental details."
+    "You write questions for an American pub trivia night — the fun, social kind "
+    "at a bar. Questions should feel like real pub trivia: about NOTABLE, "
+    "memorable people, songs, albums, films, TV shows, athletes, inventions, and "
+    "major events that a general crowd has plausibly heard of, with a satisfying "
+    "'oh yeah!' answer.\n\n"
+    "Ground every question ONLY in the source facts provided; the correct answer "
+    "must be verifiable from them. Never invent details.\n\n"
+    "PICK WELL — you are given several candidate facts:\n"
+    "- Choose the ONE that is most notable and memorable (a famous person, work, "
+    "team, invention, or major event).\n"
+    "- SKIP incidental minutiae even when present: exact margins / scores / counts "
+    "/ measurements, precise dates beyond the year, names of non-famous "
+    "individuals, administrative or procedural details. Those are too obscure to "
+    "know or remember and make bad pub questions.\n"
+    "- Where possible make the ANSWER the recognizable thing, with fair clues in "
+    "the question.\n\n"
+    "WRITE WELL — the player only ever sees your question, never the source:\n"
+    "- Fully self-contained. NEVER say 'the source', 'the facts', 'mentioned', "
+    "'described', 'above', or 'provided'. Bake the context (year, event, person) "
+    "into the question.\n"
+    "- If the fact has a specific year, use that exact year — never vague 'in the "
+    "1980s'. Only ask about this era; ignore incidental other-era mentions.\n"
+    "- Ask ONE thing with ONE unambiguous answer (no two-part questions).\n"
+    "- Four options: exactly one correct, three plausible and clearly wrong (real "
+    "same-category options). Vary which option is correct.\n\n"
+    "GOOD:  'Which 1982 Michael Jackson album became the best-selling album of all "
+    "time?' -> Thriller\n"
+    "BAD (minutiae): 'By how many pounds per rower was the 1984 Oxford Boat Race "
+    "crew heavier than Cambridge?'  /  'What was the name of the cox who steered "
+    "Oxford in the 1987 Boat Race?'"
 )
 
 
@@ -50,10 +63,12 @@ def make_question(decade: str, *, category: str | None = None,
     topic    -> semantic search for relevant facts (focused study)
     no topic -> random sample for variety (general quiz)
     """
+    # Wider candidate pool for general quizzes so the model can pick a notable
+    # fact rather than being stuck with one random (often obscure) chunk.
     if topic:
-        facts = retrieval.search(decade, topic, k=5, category=category)
+        facts = retrieval.search(decade, topic, k=6, category=category)
     else:
-        facts = retrieval.sample(decade, n=5, category=category)
+        facts = retrieval.sample(decade, n=9, category=category)
     if not facts:
         raise ValueError(f"no facts for decade={decade} category={category}")
 
@@ -61,22 +76,13 @@ def make_question(decade: str, *, category: str | None = None,
     fact_block = "\n\n".join(f"[{f['id']}] ({f['category']}) {f['text']}"
                              for f in facts)
 
-    prompt = f"""Source facts about the {DECADE_LABEL.get(decade, decade)}:
+    prompt = f"""Candidate facts about the {DECADE_LABEL.get(decade, decade)} —
+pick the most NOTABLE and pub-worthy one and ignore the obscure/minutiae ones:
 
 {fact_block}
 
-Write ONE {difficulty}-difficulty multiple-choice trivia question based on the
-most interesting, specific fact above. Requirements:
-- Self-contained: do NOT mention "the source", "the facts", "mentioned",
-  "described", or "above". Bake the context (year/event/person) into the question.
-- Only ask about events from this period. If a fact incidentally mentions a year
-  from another era, do NOT build the question around that other-era detail.
-- Ask ONE thing with ONE clear answer (no two-part questions).
-- 4 options; exactly one correct and verifiable from the facts.
-- The other 3 are plausible but wrong.
-- Vary which option is correct (don't always pick A).
-- One-sentence explanation, also without referring to "the source".
-- Set source_id to the [id] of the fact the question is based on.
+Write ONE {difficulty}-difficulty multiple-choice pub-trivia question from the
+most notable fact, following all the rules. Set source_id to the [id] you used.
 
 Return ONLY JSON:
 {{"question": "...", "choices": ["...","...","...","..."],
