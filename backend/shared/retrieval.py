@@ -21,7 +21,9 @@ except ImportError:  # Lambda without a numpy layer
 DIM = 1024
 DECADE_LABEL = {"60s": "1960s", "70s": "1970s", "80s": "1980s",
                 "90s": "1990s", "00s": "2000s"}
-TDIH_KEY = "tdih"          # cross-cutting "This Day in History" corpus
+DECADE_START = {"60s": 1960, "70s": 1970, "80s": 1980,
+                "90s": 1990, "00s": 2000}
+TDIH_KEY = "tdih"          # cross-cutting "This Week in History" corpus
 ALL_KEY = "all"            # virtual decade spanning every ingested decade
 
 # Local default; Lambda overrides via env to a /tmp path it syncs from S3.
@@ -70,21 +72,57 @@ def _load_base(key: str):
     return _base_cache[key]
 
 
+def _tdih_year_range(decade: str):
+    """Years of This-Week facts to include for a given view.
+      a specific decade -> just that decade's years (decade-aligned questions)
+      'all'             -> the span of all decades (1960–2009)
+      'tdih' mode       -> None (no filter: every year, incl. Juneteenth 1865)"""
+    if decade == ALL_KEY:
+        return (min(DECADE_START.values()), max(DECADE_START.values()) + 9)
+    if decade in DECADE_START:
+        s = DECADE_START[decade]
+        return (s, s + 9)
+    return None
+
+
+def _filter_by_year(chunks, vecs, lo: int, hi: int):
+    idx = [i for i, c in enumerate(chunks) if lo <= c.get("year", -1) <= hi]
+    fc = [chunks[i] for i in idx]
+    if np is not None:
+        fv = vecs[idx] if idx else np.empty((0, DIM), dtype="float32")
+    else:
+        fv = [vecs[i] for i in idx]
+    return fc, fv
+
+
 def _load(decade: str):
     """Return composed (chunks, vectors). 'all' spans every ingested decade;
-    every view also folds in the cross-cutting This-Day-in-History corpus."""
+    every view folds in This-Week-in-History, year-scoped to the view's decade
+    (so an 80s quiz gets 1980s on-this-week facts, not all of history)."""
     if decade in _cache:
         return _cache[decade]
-    keys = _present_decades() if decade == ALL_KEY else [decade]
-    if _tdih_present() and decade != TDIH_KEY:
-        keys.append(TDIH_KEY)
+
+    if decade == TDIH_KEY:
+        base_keys: list = []                 # tdih is the sole source below
+    elif decade == ALL_KEY:
+        base_keys = _present_decades()
+    else:
+        base_keys = [decade]
 
     all_chunks: list = []
     vec_parts: list = []
-    for key in keys:
+    for key in base_keys:
         chunks, vecs = _load_base(key)
         all_chunks.extend(chunks)
         vec_parts.append(vecs)
+
+    if _tdih_present():
+        tc, tv = _load_base(TDIH_KEY)
+        rng = _tdih_year_range(decade)       # None for the standalone tdih mode
+        if rng:
+            tc, tv = _filter_by_year(tc, tv, *rng)
+        all_chunks.extend(tc)
+        vec_parts.append(tv)
 
     if np is not None:
         vectors = np.vstack(vec_parts) if vec_parts else np.empty((0, DIM))
