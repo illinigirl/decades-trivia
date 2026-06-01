@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Decades Trivia - RAG-grounded trivia study app (Bedrock + Lambda + DynamoDB)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 1024
+
+Resources:
+
+  CorpusBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  StatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+
+  TriviaApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Same-origin frontend + API, so no CORS config needed.
+      StageName: $default
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: api.app.handler
+      Environment:
+        Variables:
+          CORPUS_BUCKET: !Ref CorpusBucket
+          CORPUS_DIR: /tmp/corpus
+          STATS_TABLE: !Ref StatsTable
+      Policies:
+        - S3ReadPolicy: { BucketName: !Ref CorpusBucket }
+        - DynamoDBCrudPolicy: { TableName: !Ref StatsTable }
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        Root:
+          Type: HttpApi
+          Properties: { ApiId: !Ref TriviaApi, Path: /, Method: GET }
+        Proxy:
+          Type: HttpApi
+          Properties: { ApiId: !Ref TriviaApi, Path: /{proxy+}, Method: ANY }
+
+Outputs:
+  ApiUrl:
+    Description: Open this in a browser
+    Value: !Sub "https://${TriviaApi}.execute-api.${AWS::Region}.amazonaws.com/"
+  CorpusBucket:
+    Description: Upload corpus/*.json and *.f32 here under the corpus/ prefix
+    Value: !Ref CorpusBucket

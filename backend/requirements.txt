@@ -1,0 +1,3 @@
+# boto3 is provided by the Lambda Python runtime.
+# numpy is intentionally NOT included — retrieval falls back to pure Python in
+# Lambda, so the package has no binary deps and needs no compilation/Docker.

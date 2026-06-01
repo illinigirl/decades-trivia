@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decades Trivia</title>
+<style>
+  :root { --bg:#0f1020; --card:#1b1c33; --accent:#ff5db1; --accent2:#43e0ff;
+          --good:#3ddc84; --bad:#ff6b6b; --txt:#eef; --muted:#9aa; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:linear-gradient(160deg,#11122a,#0d0d1a); color:var(--txt);
+         min-height:100vh; }
+  header { padding:18px 20px; display:flex; align-items:center; gap:14px;
+           border-bottom:1px solid #2a2b4a; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; letter-spacing:.5px;
+       background:linear-gradient(90deg,var(--accent),var(--accent2));
+       -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .wrap { max-width:720px; margin:0 auto; padding:20px; }
+  select, button, input { font:inherit; }
+  select, input { background:var(--card); color:var(--txt); border:1px solid #33345a;
+                  border-radius:10px; padding:9px 12px; }
+  input { width:100%; }
+  .tabs { display:flex; gap:8px; margin-left:auto; }
+  .tab { background:transparent; border:1px solid #33345a; color:var(--muted);
+         padding:8px 14px; border-radius:999px; cursor:pointer; }
+  .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .card { background:var(--card); border:1px solid #2a2b4a; border-radius:16px;
+          padding:20px; margin:14px 0; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+  .q { font-size:18px; line-height:1.45; margin-bottom:16px; }
+  .badge { display:inline-block; font-size:12px; color:var(--accent2);
+           border:1px solid #2c4a55; border-radius:999px; padding:2px 10px;
+           margin-bottom:12px; }
+  .choice { display:block; width:100%; text-align:left; background:#23254a;
+            border:1px solid #33345a; color:var(--txt); padding:13px 16px;
+            border-radius:12px; margin:8px 0; cursor:pointer; transition:.12s; }
+  .choice:hover:not(:disabled) { border-color:var(--accent2); transform:translateY(-1px); }
+  .choice.correct { background:rgba(61,220,132,.18); border-color:var(--good); }
+  .choice.wrong { background:rgba(255,107,107,.16); border-color:var(--bad); }
+  .choice:disabled { cursor:default; }
+  .explain { margin-top:14px; padding:14px; background:#15162c; border-radius:12px;
+             border-left:3px solid var(--accent2); font-size:14px; line-height:1.5; }
+  .src a { color:var(--accent2); text-decoration:none; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button.primary { background:var(--accent); border:none; color:#fff;
+                   padding:11px 20px; border-radius:12px; cursor:pointer; font-weight:600; }
+  button.primary:disabled { opacity:.5; cursor:wait; }
+  .stat-grid { display:grid; grid-template-columns:1fr auto auto; gap:6px 14px;
+               font-size:14px; align-items:center; }
+  .bar { height:7px; background:#2a2b4a; border-radius:6px; overflow:hidden; min-width:90px; }
+  .bar > div { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+  .muted { color:var(--muted); font-size:13px; }
+  .fact { padding:13px; background:#15162c; border-radius:12px; margin:10px 0;
+          line-height:1.5; font-size:14px; }
+  .hide { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>◢◤ DECADES TRIVIA</h1>
+  <select id="decade"></select>
+  <select id="category"><option value="">Adaptive (weak areas)</option></select>
+  <div class="tabs">
+    <button class="tab active" data-tab="quiz">Quiz</button>
+    <button class="tab" data-tab="review">Review</button>
+    <button class="tab" data-tab="stats">Stats</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="card" id="qcard"><div class="muted">Loading…</div></div>
+    <div class="row"><button class="primary" id="next">Next question →</button></div>
+  </section>
+
+  <!-- REVIEW -->
+  <section id="review" class="hide">
+    <div class="card">
+      <div class="row">
+        <input id="topic" placeholder="Topic to review (e.g. 'Steve Redgrave', or blank for random facts)">
+        <button class="primary" id="getFacts">Get facts</button>
+      </div>
+    </div>
+    <div id="facts"></div>
+  </section>
+
+  <!-- STATS -->
+  <section id="stats" class="hide">
+    <div class="card"><div id="statBody" class="muted">No stats yet — take some questions!</div></div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (p, o) => fetch(p, {headers:{'x-user':USER}, ...o}).then(r=>r.json());
+const USER = (()=>{ let u=localStorage.getItem('dt_user');
+  if(!u){ u='u_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+          localStorage.setItem('dt_user',u);} return u; })();
+const LETTERS='ABCD';
+let current=null, answered=false;
+
+async function init(){
+  const meta = await api('/api/meta');
+  const sel = $('#decade');
+  sel.innerHTML = meta.decades.map(d=>`<option value="${d.key}">${d.label}</option>`).join('');
+  // Default to 80s if present.
+  if (meta.decades.some(d=>d.key==='80s')) sel.value='80s';
+  await loadCategories();
+  loadQuestion();
+}
+
+async function loadCategories(){
+  const decade=$('#decade').value;
+  const {categories}=await api('/api/categories?decade='+decade);
+  $('#category').innerHTML='<option value="">Adaptive (weak areas)</option>'+
+    categories.map(c=>`<option>${c}</option>`).join('');
+}
+
+async function loadQuestion(){
+  answered=false;
+  $('#next').disabled=true;
+  $('#qcard').innerHTML='<div class="muted">Thinking up a question…</div>';
+  const decade=$('#decade').value, cat=$('#category').value;
+  const q=await api(`/api/quiz?decade=${decade}`+(cat?`&category=${encodeURIComponent(cat)}`:''));
+  if(q.error){ $('#qcard').innerHTML=`<div class="muted">Error: ${q.error}</div>`;
+               $('#next').disabled=false; return; }
+  current=q;
+  $('#qcard').innerHTML=
+    `<span class="badge">${q.category}</span><div class="q">${q.question}</div>`+
+    q.choices.map((c,i)=>`<button class="choice" data-i="${i}">${LETTERS[i]}. ${c}</button>`).join('');
+  document.querySelectorAll('.choice').forEach(b=>b.onclick=()=>answer(+b.dataset.i));
+  $('#next').disabled=false;
+}
+
+async function answer(i){
+  if(answered) return; answered=true;
+  const correct=i===current.answer_index;
+  document.querySelectorAll('.choice').forEach(b=>{
+    b.disabled=true;
+    const bi=+b.dataset.i;
+    if(bi===current.answer_index) b.classList.add('correct');
+    else if(bi===i) b.classList.add('wrong');
+  });
+  const src=current.source;
+  $('#qcard').insertAdjacentHTML('beforeend',
+    `<div class="explain">${correct?'✅ Correct! ':'❌ '} ${current.explanation}
+     <div class="src" style="margin-top:8px">↪ <a href="${src.url}" target="_blank">${src.title}</a></div></div>`);
+  api('/api/answer',{method:'POST',headers:{'content-type':'application/json','x-user':USER},
+    body:JSON.stringify({decade:$('#decade').value,category:current.category,correct})});
+}
+
+function showFacts(facts){
+  $('#facts').innerHTML=facts.map(f=>
+    `<div class="fact"><span class="badge">${f.category}</span><br>${f.text}
+     <div class="src" style="margin-top:8px">↪ <a href="${f.source.url}" target="_blank">${f.source.title}</a></div></div>`
+  ).join('') || '<div class="muted">No facts found.</div>';
+}
+
+async function loadStats(){
+  const {stats}=await api(`/api/stats?decade=${$('#decade').value}`);
+  const cats=Object.keys(stats||{});
+  if(!cats.length){ $('#statBody').innerHTML='No stats yet — take some questions!'; return; }
+  let th=0,tm=0, rows='';
+  for(const c of cats.sort()){
+    const s=stats[c], tot=s.hit+s.miss, pct=tot?Math.round(100*s.hit/tot):0;
+    th+=s.hit; tm+=s.miss;
+    rows+=`<div>${c}</div><div class="bar"><div style="width:${pct}%"></div></div>`+
+          `<div>${s.hit}/${tot} · ${pct}%</div>`;
+  }
+  const tot=th+tm, pct=tot?Math.round(100*th/tot):0;
+  $('#statBody').innerHTML=`<div class="stat-grid">${rows}
+    <div style="font-weight:700;margin-top:8px">OVERALL</div>
+    <div class="bar" style="margin-top:8px"><div style="width:${pct}%"></div></div>
+    <div style="font-weight:700;margin-top:8px">${th}/${tot} · ${pct}%</div></div>`;
+}
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  ['quiz','review','stats'].forEach(id=>$('#'+id).classList.toggle('hide',id!==t.dataset.tab));
+  if(t.dataset.tab==='stats') loadStats();
+});
+$('#next').onclick=loadQuestion;
+$('#getFacts').onclick=async()=>{
+  const {facts}=await api(`/api/facts?decade=${$('#decade').value}`+
+    ($('#topic').value?`&topic=${encodeURIComponent($('#topic').value)}`:''));
+  showFacts(facts);
+};
+$('#decade').onchange=async()=>{ await loadCategories(); loadQuestion(); };
+$('#category').onchange=loadQuestion;
+init();
+</script>
+</body>
+</html>
