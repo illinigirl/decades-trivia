@@ -101,7 +101,7 @@ def _filter_by_year(chunks, vecs, lo: int, hi: int):
     return _filter_pred(chunks, vecs, lambda c: lo <= c.get("year", -1) <= hi)
 
 
-_YEAR_RE = re.compile(r"(?<!\d)(19\d\d|20\d\d)(?!\d)")
+_YEAR_RE = re.compile(r"(?<!\d)(1[789]\d\d|20\d\d)(?!\d)")  # 1700s–2099
 
 
 def _rowing_in_range(chunk: dict, lo: int, hi: int) -> bool:
