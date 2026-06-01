@@ -27,6 +27,9 @@ QUIZ_SYSTEM = (
     "etc.) so it is answerable on its own.\n"
     "- Ask about exactly ONE thing with ONE unambiguous answer. Never combine "
     "two asks (e.g. 'by what margin AND in what time').\n"
+    "- If the fact gives a specific year or date, state that exact year in the "
+    "question. Never vaguely say 'in the 1980s' or 'the summer of the decade' "
+    "when a precise year is available.\n"
     "- Prefer concrete, well-known facts over obscure incidental details."
 )
 

@@ -11,6 +11,7 @@ import json
 import math
 import os
 import random
+import re
 import struct
 
 try:
@@ -85,14 +86,32 @@ def _tdih_year_range(decade: str):
     return None
 
 
-def _filter_by_year(chunks, vecs, lo: int, hi: int):
-    idx = [i for i, c in enumerate(chunks) if lo <= c.get("year", -1) <= hi]
+def _filter_pred(chunks, vecs, pred):
+    """Keep chunks where pred(chunk) is True, dropping aligned vector rows."""
+    idx = [i for i, c in enumerate(chunks) if pred(c)]
     fc = [chunks[i] for i in idx]
     if np is not None:
         fv = vecs[idx] if idx else np.empty((0, DIM), dtype="float32")
     else:
         fv = [vecs[i] for i in idx]
     return fc, fv
+
+
+def _filter_by_year(chunks, vecs, lo: int, hi: int):
+    return _filter_pred(chunks, vecs, lambda c: lo <= c.get("year", -1) <= hi)
+
+
+_YEAR_RE = re.compile(r"(?<!\d)(19\d\d|20\d\d)(?!\d)")
+
+
+def _rowing_in_range(chunk: dict, lo: int, hi: int) -> bool:
+    """Year-scope Rowing prose: drop a chunk only if it names year(s) and none
+    fall in the decade. Chunks with no explicit year (generic rowing context)
+    are kept. Non-Rowing chunks pass through untouched (already decade-sourced)."""
+    if chunk.get("category") != "Rowing":
+        return True
+    years = {int(y) for y in _YEAR_RE.findall(chunk["text"])}
+    return (not years) or any(lo <= y <= hi for y in years)
 
 
 def _load(decade: str):
@@ -109,25 +128,36 @@ def _load(decade: str):
     else:
         base_keys = [decade]
 
-    all_chunks: list = []
-    vec_parts: list = []
+    rng = _tdih_year_range(decade)           # decade/all -> range; tdih mode -> None
+
+    # Decade bases, with Rowing prose year-scoped to the view's decade.
+    base_chunks: list = []
+    base_parts: list = []
     for key in base_keys:
         chunks, vecs = _load_base(key)
-        all_chunks.extend(chunks)
-        vec_parts.append(vecs)
+        base_chunks.extend(chunks)
+        base_parts.append(vecs)
+    if np is not None:
+        base_vecs = np.vstack(base_parts) if base_parts else np.empty((0, DIM))
+    else:
+        base_vecs = [row for part in base_parts for row in part]
+    if rng:
+        base_chunks, base_vecs = _filter_pred(
+            base_chunks, base_vecs, lambda c: _rowing_in_range(c, *rng))
 
-    if _tdih_present():
+    segments = [(base_chunks, base_vecs)]
+
+    if _tdih_present():                       # This-Week, year-scoped to the view
         tc, tv = _load_base(TDIH_KEY)
-        rng = _tdih_year_range(decade)       # None for the standalone tdih mode
         if rng:
             tc, tv = _filter_by_year(tc, tv, *rng)
-        all_chunks.extend(tc)
-        vec_parts.append(tv)
+        segments.append((tc, tv))
 
+    all_chunks = [c for chunks, _ in segments for c in chunks]
     if np is not None:
-        vectors = np.vstack(vec_parts) if vec_parts else np.empty((0, DIM))
+        vectors = np.vstack([v for _, v in segments])
     else:
-        vectors = [row for part in vec_parts for row in part]
+        vectors = [row for _, v in segments for row in v]
     _cache[decade] = (all_chunks, vectors)
     return _cache[decade]
 
