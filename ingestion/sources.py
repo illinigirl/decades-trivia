@@ -21,6 +21,15 @@ WINTER_OLYMPIC_YEARS = {1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988,
 # plain-text extract strips. Prose lives in rower & event bios, so we curate
 # standout figures per decade. (This is a rowing-group trivia night, so rowing
 # gets first-class coverage.) Decades default to [] until curated.
+# Year-indexed timeline pages: each line is "YEAR – fact". The paragraph
+# chunker would drop these (too short / list-form), so build_decade parses them
+# line-by-line and keeps the lines whose year falls in the decade. This gives
+# dedicated Inventions / Medicine categories.
+TIMELINE_SOURCES = [
+    ("Inventions", "Timeline of historic inventions"),
+    ("Medicine",   "Timeline of medicine and medical technology"),
+]
+
 ROWING_BASE = [           # evergreen rowing pages, added to every decade
     "Henley Royal Regatta",
     "World Rowing Championships",
@@ -90,6 +99,10 @@ def pages_for(decade: str) -> list[tuple[str, str]]:
     # Year-in-music adds chart/award detail beyond the decade overview.
     for y in years:
         pages.append(("Music", f"{y} in music"))
+    # Year-in-science prose enriches the Inventions category (the inventions
+    # timeline alone is thin); covers tech/discoveries of the decade.
+    for y in years:
+        pages.append(("Inventions", f"{y} in science"))
 
     # --- Sports: marquee events have rich prose (unlike year-in-sports). ---
     summer_oly = [y for y in years if y % 4 == 0]

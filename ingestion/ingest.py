@@ -25,7 +25,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 from shared import bedrock  # noqa: E402
-from sources import DECADES, TDIH_DATES, TDIH_KEY, TDIH_LABEL, pages_for  # noqa: E402
+from sources import (DECADES, TDIH_DATES, TDIH_KEY, TDIH_LABEL,  # noqa: E402
+                     TIMELINE_SOURCES, pages_for)
 
 CORPUS_DIR = os.path.join(os.path.dirname(__file__), "..", "corpus")
 WIKI_API = "https://en.wikipedia.org/w/api.php"
@@ -90,6 +91,18 @@ def title_url(title: str) -> str:
     return "https://en.wikipedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"))
 
 
+# "1981 – ...", "1981: ...", "c. 1962 — ..." — a year-prefixed timeline entry.
+_TIMELINE_LINE = re.compile(r"^(?:c\.?\s*)?(\d{4})\s*[–—:\-]\s+(.+)$")
+_timeline_cache: dict[str, str | None] = {}
+
+
+def _fetch_timeline(title: str) -> str | None:
+    """Fetch a timeline page once and reuse it across decades."""
+    if title not in _timeline_cache:
+        _timeline_cache[title] = fetch_plaintext(title)
+    return _timeline_cache[title]
+
+
 def build_decade(decade: str) -> None:
     print(f"\n=== Building corpus for {decade} ({DECADES[decade]}s) ===")
     chunks: list[dict] = []
@@ -109,6 +122,34 @@ def build_decade(decade: str) -> None:
                 "text": body,
             })
         print(f"  {title:38s} [{category:16s}] -> {len(page_chunks)} chunks")
+
+    # Year-indexed timeline pages -> dedicated Inventions / Medicine categories,
+    # keeping only the lines whose year falls inside this decade.
+    start = DECADES[decade]
+    for category, title in TIMELINE_SOURCES:
+        text = _fetch_timeline(title)
+        if not text:
+            print(f"  skip (missing): {title}")
+            continue
+        added = 0
+        for raw in text.split("\n"):
+            m = _TIMELINE_LINE.match(raw.strip())
+            if not m:
+                continue
+            year, body = int(m.group(1)), m.group(2).strip()
+            if not (start <= year <= start + 9) or len(body) < 40:
+                continue
+            chunks.append({
+                "id": f"{decade}-{len(chunks)}",
+                "decade": decade,
+                "category": category,
+                "title": title,
+                "url": title_url(title),
+                "text": f"{year}: {body}",
+                "year": year,
+            })
+            added += 1
+        print(f"  {title:38s} [{category:16s}] -> {added} chunks")
 
     print(f"  embedding {len(chunks)} chunks with Titan...")
     with ThreadPoolExecutor(max_workers=EMBED_WORKERS) as pool:
