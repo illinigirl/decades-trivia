@@ -222,14 +222,33 @@ def _verified(q: dict, era: str) -> bool:
     return True
 
 
+def _in_tdih_window(q: dict) -> bool:
+    """Confirm the question's subject actually falls on June 14–20 (any year)."""
+    try:
+        ans = q["choices"][q["answer_index"]]
+    except (KeyError, IndexError, TypeError):
+        return False
+    prompt = (f"Question: {q.get('question','')}\nAnswer: {ans}\n\n"
+              "Did the specific event, birth, or death this question is about "
+              "occur on a calendar date from June 14 to June 20 inclusive (in any "
+              "year)? Use the real historical date. Reply ONLY 'yes' or 'no'.")
+    try:
+        r = bedrock.generate(prompt, model=bedrock.OPUS, temperature=0, max_tokens=5)
+        return r.strip().lower().startswith("y")
+    except Exception:
+        return False
+
+
 def make_knowledge_question(decade: str, *, category: str | None = None,
                             focus: str | None = None, avoid=()) -> dict | None:
     """Generate a pub-trivia question from Claude's knowledge of the era, then
     verify it by independent-solve consensus. Returns None if none verify."""
     era = era_phrase(decade)
-    if category == "This Week in History" or decade == "tdih":
-        topic = f"a notable event, birth, or death that happened during " \
-                f"June 14–20, within {era}"
+    is_tdih = category == "This Week in History" or decade == "tdih"
+    if is_tdih:
+        topic = (f"a notable event, birth, or death that occurred ON a date "
+                 f"from June 14 to June 20 (inclusive), within {era}. The date "
+                 f"MUST be June 14–20 — do NOT use events from any other dates")
     elif focus:
         topic = f"{focus} ({era})"
     else:
@@ -244,7 +263,9 @@ Return ONLY JSON:
 {{"subject": "<short tag naming the subject>", "question": "...",
   "choices": ["...","...","...","..."], "answer_index": 0, "explanation": "..."}}"""
 
-    for attempt in range(5):
+    # The June 14–20 window is a narrow target, so allow more tries for it.
+    attempts = 10 if is_tdih else 5
+    for attempt in range(attempts):
         try:
             q = bedrock.generate_json(prompt, system=KNOWLEDGE_SYSTEM,
                                       temperature=0.9 if attempt == 0 else 0.6,
@@ -253,11 +274,14 @@ Return ONLY JSON:
             continue
         if _LEAK_RE.search(q.get("question", "")):
             continue
-        if _verified(q, era):
-            q["category"] = category or "Pop Culture"
-            q["decade"] = decade
-            q["source"] = None          # generated from knowledge, not a citation
-            return q
+        if not _verified(q, era):
+            continue
+        if is_tdih and not _in_tdih_window(q):   # enforce the June 14–20 window
+            continue
+        q["category"] = category or "Pop Culture"
+        q["decade"] = decade
+        q["source"] = None              # generated from knowledge, not a citation
+        return q
     return None
 
 
