@@ -21,26 +21,39 @@ except ImportError:  # Lambda without a numpy layer
 DIM = 1024
 DECADE_LABEL = {"60s": "1960s", "70s": "1970s", "80s": "1980s",
                 "90s": "1990s", "00s": "2000s"}
+TDIH_KEY = "tdih"          # cross-cutting "This Day in History" corpus
+ALL_KEY = "all"            # virtual decade spanning every ingested decade
 
 # Local default; Lambda overrides via env to a /tmp path it syncs from S3.
 CORPUS_DIR = os.environ.get("CORPUS_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "corpus"))
 
-_cache: dict = {}
+_base_cache: dict = {}     # single corpus file -> (chunks, vecs)
+_cache: dict = {}          # composed view (decade / all) -> (chunks, vecs)
 
 
-def _load(decade: str):
-    """Return (chunks, vectors). vectors is an ndarray (numpy) or list[list]
-    of L2-normalized rows (pure Python)."""
-    if decade in _cache:
-        return _cache[decade]
-    base = os.path.join(CORPUS_DIR, decade)
+def _present_decades() -> list[str]:
+    """Ingested decade corpora actually on disk (oldest -> newest)."""
+    if not os.path.isdir(CORPUS_DIR):
+        return []
+    have = {f[:-4] for f in os.listdir(CORPUS_DIR) if f.endswith(".f32")}
+    return [d for d in DECADE_LABEL if d in have]
+
+
+def _tdih_present() -> bool:
+    return os.path.exists(os.path.join(CORPUS_DIR, TDIH_KEY + ".f32"))
+
+
+def _load_base(key: str):
+    """Load one corpus file -> (chunks, L2-normalized vectors)."""
+    if key in _base_cache:
+        return _base_cache[key]
+    base = os.path.join(CORPUS_DIR, key)
     with open(base + ".json") as f:
         chunks = json.load(f)
     with open(base + ".f32", "rb") as f:
         buf = f.read()
     n = len(chunks)
-
     if np is not None:
         vecs = np.frombuffer(buf, dtype="<f4").reshape(n, DIM).astype("float32")
         norms = np.linalg.norm(vecs, axis=1, keepdims=True)
@@ -53,7 +66,31 @@ def _load(decade: str):
             row = flat[i * DIM:(i + 1) * DIM]
             norm = math.sqrt(sum(x * x for x in row)) or 1.0
             vecs.append([x / norm for x in row])
-    _cache[decade] = (chunks, vecs)
+    _base_cache[key] = (chunks, vecs)
+    return _base_cache[key]
+
+
+def _load(decade: str):
+    """Return composed (chunks, vectors). 'all' spans every ingested decade;
+    every view also folds in the cross-cutting This-Day-in-History corpus."""
+    if decade in _cache:
+        return _cache[decade]
+    keys = _present_decades() if decade == ALL_KEY else [decade]
+    if _tdih_present() and decade != TDIH_KEY:
+        keys.append(TDIH_KEY)
+
+    all_chunks: list = []
+    vec_parts: list = []
+    for key in keys:
+        chunks, vecs = _load_base(key)
+        all_chunks.extend(chunks)
+        vec_parts.append(vecs)
+
+    if np is not None:
+        vectors = np.vstack(vec_parts) if vec_parts else np.empty((0, DIM))
+    else:
+        vectors = [row for part in vec_parts for row in part]
+    _cache[decade] = (all_chunks, vectors)
     return _cache[decade]
 
 

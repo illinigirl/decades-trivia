@@ -21,18 +21,50 @@ WINTER_OLYMPIC_YEARS = {1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988,
 # plain-text extract strips. Prose lives in rower & event bios, so we curate
 # standout figures per decade. (This is a rowing-group trivia night, so rowing
 # gets first-class coverage.) Decades default to [] until curated.
-ROWING_PAGES = {
+ROWING_BASE = [           # evergreen rowing pages, added to every decade
+    "Henley Royal Regatta",
+    "World Rowing Championships",
+    "The Boat Race",
+]
+ROWING_PAGES = {          # decade-specific standout rowers/figures (prose-rich)
+    "60s": [
+        "Vyacheslav Ivanov (rower)",   # USSR: single sculls gold 1956/60/64
+        "Jack Wilson (rower)",
+    ],
+    "70s": [
+        "Pertti Karppinen",            # Finland: single sculls gold 1976...
+        "Peter-Michael Kolbe",         # West Germany sculling great
+    ],
     "80s": [
         "Steve Redgrave",          # GB legend: gold 1984 (coxed four) & 1988 (coxless pair)
         "Andy Holmes (rower)",     # Redgrave's 1988 pair partner
         "Pertti Karppinen",        # Finland: single sculls gold 1976, 1980, 1984
         "Giuseppe Abbagnale",      # Italy: coxed pair golds, world champions
         "Carmine Abbagnale",
-        "Henley Royal Regatta",
-        "World Rowing Championships",
     ],
-    "60s": [], "70s": [], "90s": [], "00s": [],
+    "90s": [
+        "Steve Redgrave",          # golds 1992 & 1996
+        "Matthew Pinsent",         # Redgrave's pair partner, multiple golds
+        "Xeno Müller",             # single sculls gold 1996
+        "Elisabeta Lipă",          # Romania, most decorated female rower
+    ],
+    "00s": [
+        "Steve Redgrave",          # fifth consecutive gold, Sydney 2000
+        "Matthew Pinsent",         # gold 2000 & 2004
+        "James Cracknell",         # GB golds 2000 & 2004
+        "Mahé Drysdale",           # NZ single sculls dominance
+    ],
 }
+
+
+# "This Week in History" — the quizmaster favours on-this-week questions, and
+# the trivia night is June 19. We ingest each Wikipedia date page (events/
+# births/deaths by year) for the calendar week containing the 19th. Edit
+# TDIH_DATES if the date/window moves.
+TDIH_KEY = "tdih"
+TDIH_LABEL = "This Week in History"
+TDIH_DATES = ["June 14", "June 15", "June 16", "June 17",
+              "June 18", "June 19", "June 20"]
 
 
 def pages_for(decade: str) -> list[tuple[str, str]]:
@@ -81,7 +113,7 @@ def pages_for(decade: str) -> list[tuple[str, str]]:
         pages.append(("Rowing", f"{y} Boat Race"))
         pages.append(("Rowing", f"The Boat Race {y}"))
     # Curated prose-rich rower/event bios (tables don't survive extraction).
-    for title in ROWING_PAGES.get(decade, []):
+    for title in ROWING_BASE + ROWING_PAGES.get(decade, []):
         pages.append(("Rowing", title))
 
     return pages

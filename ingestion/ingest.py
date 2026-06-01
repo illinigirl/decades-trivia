@@ -14,6 +14,7 @@ Re-run anytime to refresh; output files are overwritten atomically.
 """
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -24,7 +25,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 from shared import bedrock  # noqa: E402
-from sources import DECADES, pages_for  # noqa: E402
+from sources import DECADES, TDIH_DATES, TDIH_KEY, TDIH_LABEL, pages_for  # noqa: E402
 
 CORPUS_DIR = os.path.join(os.path.dirname(__file__), "..", "corpus")
 WIKI_API = "https://en.wikipedia.org/w/api.php"
@@ -127,15 +128,83 @@ def build_decade(decade: str) -> None:
     print(f"  wrote {len(chunks)} chunks ({arr.shape}) across: {', '.join(cats)}")
 
 
+_TDIH_SECTIONS = {"Events": "", "Births": "Born", "Deaths": "Died"}
+_TDIH_LINE = re.compile(r"^(\d{3,4})\s*[–—-]\s*(.+)$")
+
+
+def _parse_date_page(date: str, text: str, chunks: list[dict]) -> None:
+    """Parse one date page's events/births/deaths into year-prefixed facts."""
+    section = None
+    for raw in text.split("\n"):
+        line = raw.strip()
+        if line.startswith("=="):
+            name = line.strip("= ").strip()
+            level = (len(line) - len(line.lstrip("=")))  # 2 == top section
+            if name in _TDIH_SECTIONS:
+                section = name              # entering Events/Births/Deaths
+            elif level <= 2:
+                section = None             # a different top section (See also, etc.)
+            # level >= 3 (e.g. "=== 1901–present ===") keeps the current section
+            continue
+        if not section:
+            continue
+        m = _TDIH_LINE.match(line)
+        if not m:
+            continue
+        year, body = m.group(1), m.group(2).strip()
+        prefix = _TDIH_SECTIONS[section]
+        fact = f"{date}, {year}: {prefix + ' — ' if prefix else ''}{body}"
+        chunks.append({
+            "id": f"tdih-{len(chunks)}",
+            "decade": TDIH_KEY,
+            "category": TDIH_LABEL,
+            "title": f"{date} (Wikipedia)",
+            "url": title_url(date),
+            "text": fact,
+            "year": int(year),
+        })
+
+
+def build_tdih() -> None:
+    """Build the 'This Week in History' corpus from the week's date pages.
+
+    Date pages are year-prefixed one-liners that the paragraph chunker would
+    drop, so we parse each line into its own fact: '<date>, <year>: <event>'.
+    Stored decade-agnostic under TDIH_KEY; surfaced as a category in every mode.
+    """
+    print(f"\n=== Building '{TDIH_LABEL}' for {TDIH_DATES[0]}–{TDIH_DATES[-1]} ===")
+    chunks: list[dict] = []
+    for date in TDIH_DATES:
+        text = fetch_plaintext(date)
+        if not text:
+            print(f"  could not fetch '{date}'"); continue
+        before = len(chunks)
+        _parse_date_page(date, text, chunks)
+        print(f"  {date:10s} -> {len(chunks) - before} facts")
+    print(f"  parsed {len(chunks)} dated facts total; embedding...")
+    with ThreadPoolExecutor(max_workers=EMBED_WORKERS) as pool:
+        vectors = list(pool.map(lambda c: bedrock.embed(c["text"]), chunks))
+    arr = np.asarray(vectors, dtype="float32")
+    os.makedirs(CORPUS_DIR, exist_ok=True)
+    base = os.path.join(CORPUS_DIR, TDIH_KEY)
+    with open(base + ".json", "w") as f:
+        json.dump(chunks, f, ensure_ascii=False)
+    with open(base + ".f32", "wb") as f:
+        f.write(arr.astype("<f4").tobytes())
+    print(f"  wrote {len(chunks)} '{TDIH_LABEL}' facts")
+
+
 def main() -> None:
     targets = sys.argv[1:] or ["80s"]
     if targets == ["all"]:
-        targets = list(DECADES)
+        targets = list(DECADES) + [TDIH_KEY]
     for decade in targets:
-        if decade not in DECADES:
-            print(f"unknown decade '{decade}'; choices: {', '.join(DECADES)} | all")
-            continue
-        build_decade(decade)
+        if decade == TDIH_KEY:
+            build_tdih()
+        elif decade in DECADES:
+            build_decade(decade)
+        else:
+            print(f"unknown target '{decade}'; choices: {', '.join(DECADES)} | tdih | all")
     print("\nDone.")
 
 

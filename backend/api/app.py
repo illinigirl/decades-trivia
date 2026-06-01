@@ -53,8 +53,10 @@ def handler(event, context):
             return _resp(200, _index(), content_type="text/html; charset=utf-8")
 
         if path == "/api/meta":
-            decades = [{"key": d, "label": retrieval.DECADE_LABEL[d]}
-                       for d in corpus_s3.available()]
+            avail = corpus_s3.available()
+            decades = [{"key": d, "label": retrieval.DECADE_LABEL[d]} for d in avail]
+            if len(avail) >= 2:   # "all decades" only meaningful with multiple
+                decades.append({"key": retrieval.ALL_KEY, "label": "All decades"})
             return _resp(200, {"decades": decades})
 
         if path == "/api/categories":

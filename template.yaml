@@ -2,6 +2,19 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Decades Trivia - RAG-grounded trivia study app (Bedrock + Lambda + DynamoDB)
 
+Parameters:
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM cert ARN for the custom domain (leave blank to skip domain)
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain, e.g. trivia.megillini.dev
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref CertificateArn, ""]]
+
 Globals:
   Function:
     Runtime: python3.12
@@ -56,10 +69,34 @@ Resources:
       Events:
         Root:
           Type: HttpApi
-          Properties: { ApiId: !Ref TriviaApi, Path: /, Method: GET }
+          Properties:
+            ApiId: !Ref TriviaApi
+            Path: "/"
+            Method: GET
         Proxy:
           Type: HttpApi
-          Properties: { ApiId: !Ref TriviaApi, Path: /{proxy+}, Method: ANY }
+          Properties:
+            ApiId: !Ref TriviaApi
+            Path: "/{proxy+}"
+            Method: ANY
+
+  ApiDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasDomain
+    Properties:
+      ApiId: !Ref TriviaApi
+      DomainName: !Ref ApiDomain
+      Stage: "$default"
 
 Outputs:
   ApiUrl:
@@ -68,3 +105,7 @@ Outputs:
   CorpusBucket:
     Description: Upload corpus/*.json and *.f32 here under the corpus/ prefix
     Value: !Ref CorpusBucket
+  CustomDomainTarget:
+    Condition: HasDomain
+    Description: Point your subdomain CNAME at this (Cloudflare, DNS-only/grey)
+    Value: !GetAtt ApiDomain.RegionalDomainName

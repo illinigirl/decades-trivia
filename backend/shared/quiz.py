@@ -10,7 +10,7 @@ from . import retrieval
 from . import bedrock
 
 DECADE_LABEL = {"60s": "1960s", "70s": "1970s", "80s": "1980s",
-                "90s": "1990s", "00s": "2000s"}
+                "90s": "1990s", "00s": "2000s", "all": "1960s–2000s"}
 
 QUIZ_SYSTEM = (
     "You are a trivia question writer for a decades study app. You write "

@@ -17,20 +17,30 @@ _s3 = boto3.client("s3") if BUCKET else None
 _synced: set[str] = set()
 
 
-def ensure(decade: str) -> None:
-    if not BUCKET or decade in _synced:
+def _fetch(key: str) -> None:
+    if not BUCKET or key in _synced:
         return
     os.makedirs(retrieval.CORPUS_DIR, exist_ok=True)
     for ext in (".json", ".f32"):
-        key = f"{PREFIX}{decade}{ext}"
-        dest = os.path.join(retrieval.CORPUS_DIR, f"{decade}{ext}")
-        _s3.download_file(BUCKET, key, dest)
-    _synced.add(decade)
+        _s3.download_file(BUCKET, f"{PREFIX}{key}{ext}",
+                          os.path.join(retrieval.CORPUS_DIR, f"{key}{ext}"))
+    _synced.add(key)
+
+
+def ensure(decade: str) -> None:
+    """Make sure the corpus files needed for `decade` are on local disk.
+    'all' pulls every ingested decade; every view also needs This-Day-in-History."""
+    if not BUCKET:
+        return
+    targets = available() if decade == retrieval.ALL_KEY else [decade]
+    for t in targets:
+        _fetch(t)
+    _fetch(retrieval.TDIH_KEY)
 
 
 def available() -> list[str]:
     """Decades that have an ingested corpus (ordered oldest->newest)."""
-    order = list(retrieval.DECADE_LABEL)
+    order = list(retrieval.DECADE_LABEL)   # excludes tdih/all by construction
     if BUCKET:
         resp = _s3.list_objects_v2(Bucket=BUCKET, Prefix=PREFIX)
         found = {os.path.basename(o["Key"])[:-4]
