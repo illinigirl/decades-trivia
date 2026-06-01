@@ -42,8 +42,13 @@ def put(decade: str, category: str, q: dict) -> str:
     return qq
 
 
-def random_question(decade: str, category: str, exclude: set | None = None) -> dict | None:
-    """Return a random stored question for the slice, avoiding `exclude` qids."""
+def random_question(decade: str, category: str, recent: list | None = None) -> dict | None:
+    """Return a random stored question for the slice.
+
+    `recent` is the player's recently-seen qids, oldest->newest. Prefer unseen
+    questions; if all are seen (small/heavily-drilled slice), still never return
+    the immediately-previous one, so you don't get the same question twice in a row.
+    """
     if _ddb is None:
         return None
     resp = _ddb.query(
@@ -51,10 +56,15 @@ def random_question(decade: str, category: str, exclude: set | None = None) -> d
         ExpressionAttributeValues={":p": slice_key(decade, category)},
     )
     items = resp.get("Items", [])
-    exclude = exclude or set()
-    pool = [it for it in items if it["sk"] not in exclude] or items
-    if not pool:
+    if not items:
         return None
+    recent = recent or []
+    recent_set = set(recent)
+    pool = [it for it in items if it["sk"] not in recent_set]
+    if not pool:
+        # Everything seen: drop at least the most-recent so it can't repeat back-to-back.
+        last = recent[-1] if recent else None
+        pool = [it for it in items if it["sk"] != last] or items
     chosen = random.choice(pool)
     q = json.loads(chosen["q"])
     q["id"] = chosen["sk"]

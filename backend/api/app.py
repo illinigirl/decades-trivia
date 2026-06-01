@@ -78,7 +78,8 @@ def handler(event, context):
             topic = params.get("topic") or None
             user = _user(params, headers)
             fresh = params.get("fresh") == "1"
-            exclude = set(filter(None, (params.get("exclude") or "").split(",")))
+            # Ordered oldest->newest so we can guarantee no back-to-back repeat.
+            recent = [x for x in (params.get("exclude") or "").split(",") if x]
 
             # Focused topic study is always generated live (query-specific).
             if topic:
@@ -96,14 +97,21 @@ def handler(event, context):
             # Serve from the bank most of the time (instant); otherwise generate
             # live and cache it back so the bank keeps growing.
             if not fresh and random.random() < BANK_SERVE_PROB:
-                q = bank.random_question(decade, category, exclude)
+                q = bank.random_question(decade, category, recent)
                 if q:
                     return _resp(200, q)
             q = quiz.make_question(decade, category=category)
+            qq = bank.qid(q["question"])
+            # If a freshly generated question duplicates one just seen, prefer an
+            # unseen banked one instead of repeating.
+            if qq in recent:
+                alt = bank.random_question(decade, category, recent)
+                if alt:
+                    return _resp(200, alt)
             try:
                 q["id"] = bank.put(decade, category, q)
             except Exception:
-                q["id"] = bank.qid(q["question"])
+                q["id"] = qq
             return _resp(200, q)
 
         if path == "/api/answer" and method == "POST":
