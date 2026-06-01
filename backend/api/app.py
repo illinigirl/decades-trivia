@@ -16,10 +16,6 @@ import random
 
 from shared import bank, corpus_s3, quiz, retrieval, stats
 
-# Fraction of (non-fresh) quiz requests served from the pre-generated/cached
-# bank for speed; the rest generate live and grow the bank.
-BANK_SERVE_PROB = 0.85
-
 _INDEX_HTML = None
 
 
@@ -104,11 +100,13 @@ def handler(event, context):
                                         + client_recent))
             recent_set = set(recent)
 
-            # Serve from the bank if it has something unseen (instant); else
-            # generate live and cache it (grows the bank).
+            # Always serve an unseen banked question if one exists (instant);
+            # only generate live when the slice is exhausted (or ?fresh=1), which
+            # also grows the bank.
             q = None
-            if not fresh and random.random() < BANK_SERVE_PROB:
-                q = bank.random_question(decade, category, recent)
+            if not fresh:
+                q = bank.random_question(decade, category, recent,
+                                         retrieval.year_range(decade))
             if q is None:
                 q = quiz.make_question(decade, category=category)
                 if bank.qid(q["question"]) in recent_set:   # dup -> retry once

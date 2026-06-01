@@ -73,8 +73,8 @@ def _load_base(key: str):
     return _base_cache[key]
 
 
-def _tdih_year_range(decade: str):
-    """Years of This-Week facts to include for a given view.
+def year_range(decade: str):
+    """Year bounds for a view (used to scope facts AND banked questions):
       a specific decade -> just that decade's years (decade-aligned questions)
       'all'             -> the span of all decades (1960–2009)
       'tdih' mode       -> None (no filter: every year, incl. Juneteenth 1865)"""
@@ -104,12 +104,15 @@ def _filter_by_year(chunks, vecs, lo: int, hi: int):
 _YEAR_RE = re.compile(r"(?<!\d)(1[789]\d\d|20\d\d)(?!\d)")  # 1700s–2099
 
 
-def _rowing_in_range(chunk: dict, lo: int, hi: int) -> bool:
-    """Year-scope Rowing prose: drop a chunk only if it names year(s) and none
-    fall in the decade. Chunks with no explicit year (generic rowing context)
-    are kept. Non-Rowing chunks pass through untouched (already decade-sourced)."""
-    if chunk.get("category") != "Rowing":
-        return True
+def _chunk_in_range(chunk: dict, lo: int, hi: int) -> bool:
+    """Year-scope a chunk to a decade so off-era facts don't leak into a quiz
+    (e.g. The Flintstones (1960) mentioned on the '1980s in television' page).
+
+    Keep if: it has a year field in range, OR (no year field) it names no year,
+    OR it names at least one year inside the decade. Drop only chunks whose
+    every named year is outside the decade."""
+    if "year" in chunk:
+        return lo <= chunk["year"] <= hi
     years = {int(y) for y in _YEAR_RE.findall(chunk["text"])}
     return (not years) or any(lo <= y <= hi for y in years)
 
@@ -128,7 +131,7 @@ def _load(decade: str):
     else:
         base_keys = [decade]
 
-    rng = _tdih_year_range(decade)           # decade/all -> range; tdih mode -> None
+    rng = year_range(decade)                 # decade/all -> range; tdih mode -> None
 
     # Decade bases, with Rowing prose year-scoped to the view's decade.
     base_chunks: list = []
@@ -143,7 +146,7 @@ def _load(decade: str):
         base_vecs = [row for part in base_parts for row in part]
     if rng:
         base_chunks, base_vecs = _filter_pred(
-            base_chunks, base_vecs, lambda c: _rowing_in_range(c, *rng))
+            base_chunks, base_vecs, lambda c: _chunk_in_range(c, *rng))
 
     segments = [(base_chunks, base_vecs)]
 

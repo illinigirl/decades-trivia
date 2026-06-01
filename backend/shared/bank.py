@@ -9,8 +9,21 @@ import hashlib
 import json
 import os
 import random
+import re
 
 import boto3
+
+_YEAR_RE = re.compile(r"(?<!\d)(1[789]\d\d|20\d\d)(?!\d)")  # 1700s–2099
+
+
+def _in_range(text: str, rng) -> bool:
+    """A banked question is OK for the view if it names no year, or any named
+    year falls in range. Drops legacy off-decade questions (e.g. a 1960 fact
+    that leaked into an 80s slice before corpus year-scoping)."""
+    if not rng:
+        return True
+    years = {int(y) for y in _YEAR_RE.findall(text)}
+    return (not years) or any(rng[0] <= y <= rng[1] for y in years)
 
 TABLE = os.environ.get("QUESTIONS_TABLE")
 _ddb = boto3.resource("dynamodb").Table(TABLE) if TABLE else None
@@ -42,12 +55,14 @@ def put(decade: str, category: str, q: dict) -> str:
     return qq
 
 
-def random_question(decade: str, category: str, recent: list | None = None) -> dict | None:
+def random_question(decade: str, category: str, recent: list | None = None,
+                    rng=None) -> dict | None:
     """Return a random stored question for the slice.
 
-    `recent` is the player's recently-seen qids, oldest->newest. Prefer unseen
-    questions; if all are seen (small/heavily-drilled slice), still never return
-    the immediately-previous one, so you don't get the same question twice in a row.
+    `recent` is the player's recently-seen qids. `rng` is the (lo, hi) year
+    bound for the view: banked questions naming only out-of-range years are
+    skipped (legacy off-decade questions). Returns None if nothing servable,
+    so the caller generates a fresh question instead of repeating.
     """
     if _ddb is None:
         return None
@@ -58,7 +73,9 @@ def random_question(decade: str, category: str, recent: list | None = None) -> d
     items = resp.get("Items", [])
     if not items:
         return None
-    pool = [it for it in items if it["sk"] not in set(recent or [])]
+    seen = set(recent or [])
+    pool = [it for it in items if it["sk"] not in seen
+            and _in_range(json.loads(it["q"]).get("question", ""), rng)]
     if not pool:
         # Nothing new in this slice — return None so the caller generates a
         # fresh question instead of repeating one you've already seen.
