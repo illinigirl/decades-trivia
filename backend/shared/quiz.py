@@ -18,6 +18,11 @@ _LEAK_RE = re.compile(
     r"mentioned|described above|as described|provided|listed above|stated above|"
     r"according to the (?:source|passage|text|facts))\b", re.I)
 
+# Chain-of-thought / self-correction that leaked into the question text.
+_REASONING_RE = re.compile(
+    r"(wait,|let me reconsider|let me think|on second thought|that'?s not in|"
+    r"i'?ll reconsider|hmm,|let me pick|let me choose|instead, let)", re.I)
+
 DECADE_LABEL = {"60s": "1960s", "70s": "1970s", "80s": "1980s",
                 "90s": "1990s", "00s": "2000s", "all": "1960s–2000s",
                 "tdih": "this week in history (June 14–20, any year)"}
@@ -191,7 +196,10 @@ KNOWLEDGE_SYSTEM = (
     "trivially easy. The player must have to actually know it.\n"
     "- Do NOT telegraph the answer with logic clues either. E.g. 'which pick, after "
     "two teams passed on him?' reveals the 3rd pick; 'the only X to ever...' reveals "
-    "uniqueness. The wording must not let the answer be deduced without knowing the fact."
+    "uniqueness. The wording must not let the answer be deduced without knowing the fact.\n"
+    "- The 'question' field must contain ONLY the final question — no reasoning, no "
+    "self-correction ('wait', 'let me reconsider', 'actually'), no preamble, and "
+    "exactly one question."
 )
 
 LETTERS = "ABCD"
@@ -288,8 +296,9 @@ Return ONLY JSON:
                                       max_tokens=500)
         except Exception:
             continue
-        if _LEAK_RE.search(q.get("question", "")):
-            continue
+        question_text = q.get("question", "")
+        if _LEAK_RE.search(question_text) or _REASONING_RE.search(question_text):
+            continue                             # source ref or leaked reasoning
         if gives_away(q):                        # answer leaked into the question
             continue
         if not _verified(q, era):

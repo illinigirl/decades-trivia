@@ -14,6 +14,10 @@ import re
 import boto3
 
 _YEAR_RE = re.compile(r"(?<!\d)(1[789]\d\d|20\d\d)(?!\d)")  # 1700s–2099
+# Leaked chain-of-thought / self-correction in a stored question.
+_REASONING_RE = re.compile(
+    r"(wait,|let me reconsider|let me think|on second thought|that'?s not in|"
+    r"i'?ll reconsider|hmm,|let me pick|let me choose|instead, let)", re.I)
 
 
 def _in_range(text: str, rng) -> bool:
@@ -115,7 +119,9 @@ def random_question(decade: str, category: str, recent: list | None = None,
         if it["sk"] in seen:
             continue
         qd = json.loads(it["q"])
-        if not _in_range(qd.get("question", ""), rng) or _gives_away(qd):
+        qtext = qd.get("question", "")
+        if (not _in_range(qtext, rng) or _gives_away(qd)
+                or _REASONING_RE.search(qtext)):
             continue
         pool.append(it)
     if not pool:
