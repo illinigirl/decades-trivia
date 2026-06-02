@@ -43,6 +43,19 @@ def slice_key(decade: str, category: str) -> str:
     return f"{decade}#{category}"
 
 
+def shuffle_choices(q: dict) -> dict:
+    """Randomize option order so the correct answer isn't position-biased (LLMs
+    tend to put it first). Fixes the bank's existing questions at serve time."""
+    choices = q.get("choices")
+    if not choices:
+        return q
+    order = list(range(len(choices)))
+    random.shuffle(order)
+    q["choices"] = [choices[i] for i in order]
+    q["answer_index"] = order.index(q.get("answer_index", 0))
+    return q
+
+
 def qid(question: str) -> str:
     """Stable short id from the question text (used for live/topic questions)."""
     return hashlib.sha1(question.strip().lower().encode()).hexdigest()[:12]
@@ -112,7 +125,7 @@ def random_question(decade: str, category: str, recent: list | None = None,
     chosen = random.choice(pool)
     q = json.loads(chosen["q"])
     q["id"] = chosen["sk"]
-    return q
+    return shuffle_choices(q)
 
 
 def count(decade: str, category: str) -> int:

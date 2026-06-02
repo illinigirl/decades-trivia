@@ -84,6 +84,7 @@ def handler(event, context):
                 q = quiz.make_knowledge_question(decade, focus=topic)
                 if q:
                     q["id"] = bank.put(decade, q.get("category", "Pop Culture"), q)
+                    bank.shuffle_choices(q)
                     stats.record_served(user, decade, q["id"])
                     return _resp(200, q)
 
@@ -116,6 +117,7 @@ def handler(event, context):
                                            "please try again"})
                 else:
                     q["id"] = bank.put(decade, category, q)
+                    bank.shuffle_choices(q)
 
             stats.record_served(user, decade, q["id"])
             return _resp(200, q)
