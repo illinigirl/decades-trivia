@@ -23,8 +23,22 @@ STACK = os.environ.get("STACK", "decades-trivia")
 REGION = os.environ.get("AWS_REGION", "us-east-2")
 MAINSTREAM = int(os.environ.get("N", "30"))
 NICHE_N = int(os.environ.get("NICHE_N", "18"))
+# This Week in History gets bigger targets: lots of June 14–20 history overall,
+# so the standalone "any year" (tdih) pool can be deep; per-decade is narrower.
+TWIH_DECADE_N = int(os.environ.get("TWIH_N", "30"))
+TWIH_ANY_N = int(os.environ.get("TDIH_ANY_N", "60"))
 WORKERS = 5
 VIEWS = ["60s", "70s", "80s", "90s", "00s", "all", "tdih"]
+
+
+def target_for(decade: str, category: str) -> int:
+    if decade == "tdih":
+        return TWIH_ANY_N
+    if category == "This Week in History":
+        return TWIH_DECADE_N
+    if category in quiz.NICHE_CATEGORIES:
+        return NICHE_N
+    return MAINSTREAM
 
 _cf = boto3.client("cloudformation", region_name=REGION)
 _outs = _cf.describe_stacks(StackName=STACK)["Stacks"][0]["Outputs"]
@@ -36,7 +50,7 @@ from shared import bank, quiz  # noqa: E402
 
 
 def seed_slice(decade: str, category: str) -> None:
-    target = NICHE_N if category in quiz.NICHE_CATEGORIES else MAINSTREAM
+    target = target_for(decade, category)
     have = bank.count(decade, category)
     if have >= target:
         print(f"  {decade:4s} {category:20s} has {have} (skip)")
