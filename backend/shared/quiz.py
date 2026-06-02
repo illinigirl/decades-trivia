@@ -188,7 +188,10 @@ KNOWLEDGE_SYSTEM = (
     "wrong (real same-category options). Vary which position is correct.\n"
     "- NEVER reveal the answer in the question. Do not include the correct answer "
     "(or a quote/phrase that contains it) in the question text — that makes it "
-    "trivially easy. The player must have to actually know it."
+    "trivially easy. The player must have to actually know it.\n"
+    "- Do NOT telegraph the answer with logic clues either. E.g. 'which pick, after "
+    "two teams passed on him?' reveals the 3rd pick; 'the only X to ever...' reveals "
+    "uniqueness. The wording must not let the answer be deduced without knowing the fact."
 )
 
 LETTERS = "ABCD"
