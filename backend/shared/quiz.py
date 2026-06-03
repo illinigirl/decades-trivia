@@ -240,9 +240,11 @@ def _verified(q: dict, era: str) -> bool:
     marked = q.get("answer_index")
     if marked is None or not (0 <= marked < len(q.get("choices", []))):
         return False
-    # Solvers independent of the Opus generator. Sonnet (strong) + Haiku (fast).
-    # Requiring Haiku to also agree doubles as a "well-known enough" filter.
-    for model in (bedrock.SONNET, bedrock.HAIKU):
+    # Verify by independent blind solve. Sonnet is heavily throttled (~6s) and
+    # kills throughput, so use Opus + Haiku (both fast): Opus re-solves at temp 0
+    # and Haiku gives an independent cross-check (it also keeps questions
+    # recognizable — Haiku must know the answer too).
+    for model in (bedrock.OPUS, bedrock.HAIKU):
         if _solve(q, era, model) != marked:
             return False
     return True

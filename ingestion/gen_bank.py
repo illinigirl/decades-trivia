@@ -21,14 +21,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 STACK = os.environ.get("STACK", "decades-trivia")
 REGION = os.environ.get("AWS_REGION", "us-east-2")
-MAINSTREAM = int(os.environ.get("N", "60"))
-NICHE_N = int(os.environ.get("NICHE_N", "35"))
+MAINSTREAM = int(os.environ.get("N", "45"))
+NICHE_N = int(os.environ.get("NICHE_N", "30"))
 # This Week in History: per-decade June 14–20 events are genuinely scarce, so
 # keep that target small (the early-exit below stops once it runs dry). The
 # standalone "any year" mode has lots of history to draw on.
 TWIH_DECADE_N = int(os.environ.get("TWIH_N", "15"))
 TWIH_ANY_N = int(os.environ.get("TDIH_ANY_N", "45"))
-WORKERS = 5
+WORKERS = 3   # account Bedrock throughput is limited; fewer workers = fewer throttle spikes
 VIEWS = ["60s", "70s", "80s", "90s", "00s", "all", "tdih"]
 
 
