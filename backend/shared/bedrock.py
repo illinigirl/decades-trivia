@@ -16,7 +16,9 @@ EMBED_MODEL = os.environ.get("EMBED_MODEL", "amazon.titan-embed-text-v2:0")
 SONNET = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 OPUS = "us.anthropic.claude-opus-4-5-20251101-v1:0"
 HAIKU = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-GEN_MODEL = os.environ.get("GEN_MODEL", SONNET)
+# Generate with Opus: high quality AND currently far faster than Sonnet, which
+# is heavily throttled on this account (~6s/call vs ~1.5s for Opus).
+GEN_MODEL = os.environ.get("GEN_MODEL", OPUS)
 
 # Adaptive retries back off automatically when Bedrock throttles on-demand
 # throughput — essential for bulk embedding during ingestion.

@@ -240,7 +240,9 @@ def _verified(q: dict, era: str) -> bool:
     marked = q.get("answer_index")
     if marked is None or not (0 <= marked < len(q.get("choices", []))):
         return False
-    for model in (bedrock.SONNET, bedrock.OPUS):
+    # Solvers independent of the Opus generator. Sonnet (strong) + Haiku (fast).
+    # Requiring Haiku to also agree doubles as a "well-known enough" filter.
+    for model in (bedrock.SONNET, bedrock.HAIKU):
         if _solve(q, era, model) != marked:
             return False
     return True
