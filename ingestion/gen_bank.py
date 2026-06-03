@@ -23,10 +23,11 @@ STACK = os.environ.get("STACK", "decades-trivia")
 REGION = os.environ.get("AWS_REGION", "us-east-2")
 MAINSTREAM = int(os.environ.get("N", "60"))
 NICHE_N = int(os.environ.get("NICHE_N", "35"))
-# This Week in History gets bigger targets: lots of June 14–20 history overall,
-# so the standalone "any year" (tdih) pool can be deep; per-decade is narrower.
-TWIH_DECADE_N = int(os.environ.get("TWIH_N", "30"))
-TWIH_ANY_N = int(os.environ.get("TDIH_ANY_N", "60"))
+# This Week in History: per-decade June 14–20 events are genuinely scarce, so
+# keep that target small (the early-exit below stops once it runs dry). The
+# standalone "any year" mode has lots of history to draw on.
+TWIH_DECADE_N = int(os.environ.get("TWIH_N", "15"))
+TWIH_ANY_N = int(os.environ.get("TDIH_ANY_N", "45"))
 WORKERS = 5
 VIEWS = ["60s", "70s", "80s", "90s", "00s", "all", "tdih"]
 
@@ -56,14 +57,18 @@ def seed_slice(decade: str, category: str) -> None:
         print(f"  {decade:4s} {category:20s} has {have} (skip)")
         return
     need = target - have
-    added, rounds, avoid, seen = 0, 0, [], set()
+    added, dry, avoid, seen = 0, 0, [], set()
 
+    # Stop when we hit the target OR after 2 consecutive rounds that add nothing
+    # new (the subject pool is exhausted) — prevents stalling on unreachable
+    # targets like per-decade This Week.
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        while added < need and rounds < need + 8:
+        while added < need and dry < 2:
             batch = list(pool.map(
                 lambda _: quiz.make_knowledge_question(
                     decade, category=category, avoid=avoid),
                 range(WORKERS)))
+            new_this_round = 0
             for q in batch:
                 if not q:
                     continue
@@ -74,9 +79,10 @@ def seed_slice(decade: str, category: str) -> None:
                 avoid.append(q.get("subject", ""))
                 bank.put(decade, category, q)
                 added += 1
+                new_this_round += 1
                 if added >= need:
                     break
-            rounds += 1
+            dry = dry + 1 if new_this_round == 0 else 0
     print(f"  {decade:4s} {category:20s} +{added} (now ~{have + added}/{target})")
 
 

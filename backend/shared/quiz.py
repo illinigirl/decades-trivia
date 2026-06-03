@@ -293,8 +293,9 @@ Return ONLY JSON:
 {{"subject": "<short tag naming the subject>", "question": "...",
   "choices": ["...","...","...","..."], "answer_index": 0, "explanation": "..."}}"""
 
-    # The June 14–20 window is a narrow target, so allow more tries for it.
-    attempts = 10 if is_tdih else 5
+    # The June 14–20 window is a narrow target, so allow a few more tries for it
+    # (but not so many that throttled retries pile up).
+    attempts = 6 if is_tdih else 4
     for attempt in range(attempts):
         try:
             q = bedrock.generate_json(prompt, system=KNOWLEDGE_SYSTEM,
