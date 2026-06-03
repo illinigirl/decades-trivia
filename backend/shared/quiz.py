@@ -247,18 +247,24 @@ def _verified(q: dict, era: str) -> bool:
 
 
 def _in_tdih_window(q: dict) -> bool:
-    """Confirm the question's subject actually falls on June 14–20 (any year)."""
+    """Confirm the subject's REAL date is June 14–20 — independently of any date
+    the question states (which may be wrong, e.g. 'June 20' for the July moon
+    landing). Two-step: recall the true date, then check the window."""
     try:
         ans = q["choices"][q["answer_index"]]
     except (KeyError, IndexError, TypeError):
         return False
-    prompt = (f"Question: {q.get('question','')}\nAnswer: {ans}\n\n"
-              "Did the specific event, birth, or death this question is about "
-              "occur on a calendar date from June 14 to June 20 inclusive (in any "
-              "year)? Use the real historical date. Reply ONLY 'yes' or 'no'.")
+    prompt = (
+        f"Question: {q.get('question','')}\nAnswer: {ans}\n\n"
+        "IGNORE any date stated in the question — it may be wrong. Using your own "
+        "accurate knowledge, what is the real month and day this event/birth/death "
+        "actually occurred? State that real date, then on a new line reply "
+        "'WINDOW: yes' ONLY if that real date is between June 14 and June 20 "
+        "inclusive, otherwise 'WINDOW: no'.")
     try:
-        r = bedrock.generate(prompt, model=bedrock.OPUS, temperature=0, max_tokens=5)
-        return r.strip().lower().startswith("y")
+        r = bedrock.generate(prompt, model=bedrock.OPUS, temperature=0, max_tokens=80)
+        m = re.search(r"window:\s*(yes|no)", r, re.I)
+        return bool(m) and m.group(1).lower() == "yes"
     except Exception:
         return False
 
