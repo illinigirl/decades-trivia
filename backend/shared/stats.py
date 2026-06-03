@@ -50,7 +50,7 @@ def recent_served(user: str, decade: str) -> list[str]:
     return list(item.get("ids", [])) if item else []
 
 
-def record_served(user: str, decade: str, qid: str, cap: int = 50) -> None:
+def record_served(user: str, decade: str, qid: str, cap: int = 250) -> None:
     """Append a served question id, keeping the last `cap`. Server-side dedup
     so repeats are prevented even if the client doesn't send its seen list."""
     if _ddb is None or not qid:

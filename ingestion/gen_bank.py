@@ -21,8 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 STACK = os.environ.get("STACK", "decades-trivia")
 REGION = os.environ.get("AWS_REGION", "us-east-2")
-MAINSTREAM = int(os.environ.get("N", "30"))
-NICHE_N = int(os.environ.get("NICHE_N", "18"))
+MAINSTREAM = int(os.environ.get("N", "60"))
+NICHE_N = int(os.environ.get("NICHE_N", "35"))
 # This Week in History gets bigger targets: lots of June 14–20 history overall,
 # so the standalone "any year" (tdih) pool can be deep; per-decade is narrower.
 TWIH_DECADE_N = int(os.environ.get("TWIH_N", "30"))

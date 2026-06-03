@@ -105,9 +105,14 @@ def handler(event, context):
             if not fresh:
                 q = bank.random_question(decade, category, recent, yr)
             if q is None:
-                q = quiz.make_knowledge_question(decade, category=category)
+                # Bank exhausted for this user: generate live, telling it to avoid
+                # the subjects already seen so it doesn't recycle the famous few.
+                avoid = [k[2:].replace("-", " ") for k in recent
+                         if k.startswith("s:")][-40:]
+                q = quiz.make_knowledge_question(decade, category=category, avoid=avoid)
                 if q and bank.item_key(q) in recent_set:    # same subject -> retry
-                    alt = quiz.make_knowledge_question(decade, category=category)
+                    alt = quiz.make_knowledge_question(decade, category=category,
+                                                       avoid=avoid)
                     if alt and bank.item_key(alt) not in recent_set:
                         q = alt
                 if q is None:        # generation failed -> serve any banked question
