@@ -7,8 +7,16 @@ return the citation alongside, so nothing is hallucinated.
 import json
 import re
 
+from botocore.exceptions import (NoCredentialsError, SSOTokenLoadError,
+                                  TokenRetrievalError, UnauthorizedSSOTokenError)
+
 from . import retrieval
 from . import bedrock
+
+# Credential/SSO failures must abort loudly, not look like "no question" (which
+# would make a seed run silently early-exit and falsely report "Done").
+_AUTH_ERRORS = (NoCredentialsError, SSOTokenLoadError, TokenRetrievalError,
+                UnauthorizedSSOTokenError)
 
 # Phrases that mean the model leaked its grounding context into the question.
 # If a generated question contains one, we regenerate (the player never sees
@@ -228,6 +236,8 @@ def _solve(q: dict, era: str, model: str) -> int:
         for ch in ans:
             if ch in LETTERS:
                 return LETTERS.index(ch)
+    except _AUTH_ERRORS:
+        raise
     except Exception:
         return -1
     return -1
@@ -305,6 +315,8 @@ Return ONLY JSON:
             q = bedrock.generate_json(prompt, system=KNOWLEDGE_SYSTEM,
                                       temperature=0.9 if attempt == 0 else 0.6,
                                       max_tokens=500)
+        except _AUTH_ERRORS:
+            raise
         except Exception:
             continue
         question_text = q.get("question", "")
