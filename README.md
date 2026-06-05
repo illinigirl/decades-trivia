@@ -7,8 +7,8 @@ review facts. Questions are **generated from Claude's knowledge of each decade**
 (broad coverage) and **fact-checked by a two-model consensus** so you don't
 study hallucinations.
 
-Built fully AWS-native: **Bedrock** (Claude Sonnet 4.5 + Opus 4.5 for generation
-and verification, Titan for embeddings), **Lambda + API Gateway + DynamoDB**,
+Built fully AWS-native: **Bedrock** (Claude Opus 4.5 for generation, Opus 4.5 +
+Haiku 4.5 for blind verification, Titan for embeddings), **Lambda + API Gateway + DynamoDB**,
 **S3** for the corpus, ACM/Cloudflare custom domain. No external API keys.
 
 **Live:** https://trivia.megillini.dev
@@ -20,7 +20,7 @@ and verification, Titan for embeddings), **Lambda + API Gateway + DynamoDB**,
 1. **Generate** (`backend/shared/quiz.py`) — Claude writes a pub-style
    multiple-choice question about a notable subject in the selected era.
 2. **Fact-check (the important part)** — the marked answer is hidden and **two
-   different models (Sonnet 4.5 + Opus 4.5) independently answer the question
+   different models (Opus 4.5 + Haiku 4.5) independently answer the question
    blind**. It's kept only if both pick the marked answer. This catches wrong
    answers *and* ambiguous questions; anything in doubt is discarded.
 3. **Quality guards** — reject questions that reveal/telegraph their own answer;

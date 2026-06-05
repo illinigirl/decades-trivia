@@ -1,6 +1,6 @@
 """Seed the question bank from Claude's knowledge of each decade.
 
-Every question is verified by independent-solve consensus (Sonnet + Opus both
+Every question is verified by independent-solve consensus (Opus + Haiku both
 answer it blind; kept only if both pick the marked answer) — so the bank holds
 trustworthy questions, not hallucinations. Deduped by subject for breadth, with
 an accumulating "avoid" list pushing coverage across many subjects.
