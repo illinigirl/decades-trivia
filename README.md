@@ -11,6 +11,8 @@ Built fully AWS-native: **Bedrock** (Claude Sonnet 4.5 + Opus 4.5 for generation
 and verification, Titan for embeddings), **Lambda + API Gateway + DynamoDB**,
 **S3** for the corpus, ACM/Cloudflare custom domain. No external API keys.
 
+**Live:** https://trivia.megillini.dev
+
 ## How a question is made
 
 1. **Generate** (`backend/shared/quiz.py`) — Claude writes a pub-style
@@ -54,3 +56,7 @@ quiz for local practice.
 ```bash
 CERT_ARN=<acm-arn> DOMAIN=trivia.megillini.dev ./deploy.sh
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
