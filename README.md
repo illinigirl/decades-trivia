@@ -13,6 +13,8 @@ and verification, Titan for embeddings), **Lambda + API Gateway + DynamoDB**,
 
 **Live:** https://trivia.megillini.dev
 
+![A generated, fact-checked 1980s question in the live app — category tag, adaptive "weak areas" mode, and decade selector](docs/quiz.png)
+
 ## How a question is made
 
 1. **Generate** (`backend/shared/quiz.py`) — Claude writes a pub-style
