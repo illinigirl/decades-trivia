@@ -223,6 +223,17 @@ def gives_away(q: dict) -> bool:
     return len(a) >= 3 and a in q.get("question", "").lower()
 
 
+def is_clean(q: dict) -> bool:
+    """True if a question is safe to show: no leaked grounding/reasoning and it
+    doesn't give its own answer away. Used at generation time AND at serve time —
+    so banked questions written before these guards existed get filtered out
+    instead of shown, rather than relying on a one-time backfill."""
+    text = q.get("question", "")
+    if _LEAK_RE.search(text) or _REASONING_RE.search(text):
+        return False
+    return not gives_away(q)
+
+
 def _solve(q: dict, era: str, model: str) -> int:
     """Have a model answer the question BLIND (without seeing the marked answer).
     Returns the option index it picks, or -1 if unparseable."""
@@ -283,6 +294,38 @@ def _in_tdih_window(q: dict) -> bool:
         return False
 
 
+def _premise_ok(q: dict, era: str) -> bool:
+    """True if the factual claims the question makes about its subject hold up —
+    dates, counts, roles, and especially ORDINALS/SUPERLATIVES ('his second',
+    'the only', 'the first').
+
+    `_verified` checks that the marked answer is right, but not that the
+    question's *premise* is true — so a false qualifier ('his SECOND U.S. Open'
+    when it was his only major) slips through, because the answer is still the
+    best option. This pass closes that gap. It fails OPEN (only rejects on an
+    explicit 'wrong') so a verifier hiccup never silently blocks all generation."""
+    try:
+        ans = q["choices"][q["answer_index"]]
+    except (KeyError, IndexError, TypeError):
+        return False
+    prompt = (
+        f"QUESTION: {q.get('question','')}\n"
+        f"INTENDED ANSWER: {ans}\n\n"
+        "Check ONLY the factual claims the question makes about its subject "
+        "(dates, counts, roles, places, and especially ordinals/superlatives "
+        "like 'second', 'only', 'first', 'youngest') against accurate real-world "
+        "knowledge — NOT whether the answer is correct. Reply 'PREMISE: ok' if "
+        "every claim is true, otherwise 'PREMISE: wrong'.")
+    try:
+        r = bedrock.generate(prompt, model=bedrock.OPUS, temperature=0, max_tokens=40)
+    except _AUTH_ERRORS:
+        raise
+    except Exception:
+        return True   # never block generation on a verifier hiccup
+    m = re.search(r"premise:\s*(ok|wrong)", r, re.I)
+    return not (m and m.group(1).lower() == "wrong")
+
+
 def make_knowledge_question(decade: str, *, category: str | None = None,
                             focus: str | None = None, avoid=()) -> dict | None:
     """Generate a pub-trivia question from Claude's knowledge of the era, then
@@ -319,12 +362,11 @@ Return ONLY JSON:
             raise
         except Exception:
             continue
-        question_text = q.get("question", "")
-        if _LEAK_RE.search(question_text) or _REASONING_RE.search(question_text):
-            continue                             # source ref or leaked reasoning
-        if gives_away(q):                        # answer leaked into the question
+        if not is_clean(q):                      # leaked source/reasoning or giveaway
             continue
-        if not _verified(q, era):
+        if not _verified(q, era):                # answer survives blind consensus
+            continue
+        if not _premise_ok(q, era):              # the question's premise is true
             continue
         if is_tdih and not _in_tdih_window(q):   # enforce the June 14–20 window
             continue

@@ -104,6 +104,8 @@ def handler(event, context):
             q = None
             if not fresh:
                 q = bank.random_question(decade, category, recent, yr)
+                if q is not None and not quiz.is_clean(q):
+                    q = None    # stale pre-guard bank entry — drop, regenerate clean
             if q is None:
                 # Bank exhausted for this user: generate live, telling it to avoid
                 # the subjects already seen so it doesn't recycle the famous few.
